@@ -1,0 +1,324 @@
+.TH SLURM-GPU 1 "February 2026" "slurm-gpu 0.1.0" "Slurm GPU Reporting"
+.SH NAME
+slurm-gpu \- GPU utilization reporting for Slurm clusters
+.SH SYNOPSIS
+.B slurm-gpu
+.I command
+.RI [ options ]
+.PP
+.B slurm-report
+.RI [ options ]
+.PP
+.B slurm-usage
+.RI [ options ]
+.PP
+.B slurm-stat
+.RI [ options ]
+.PP
+.B slurm-show-tres
+.SH DESCRIPTION
+.B slurm-gpu
+queries Slurm accounting data (sacct), node configuration (scontrol), and
+job queues (squeue) to produce GPU utilization reports, cluster-wide usage
+summaries, and real-time job monitoring statistics.
+.PP
+The binary supports symlink dispatch: creating symlinks named
+.BR slurm-report ,
+.BR slurm-usage ,
+.BR slurm-stat ,
+or
+.B slurm-show-tres
+pointing to
+.B slurm-gpu
+invokes the corresponding subcommand automatically.
+.SH COMMANDS
+.TP
+.B report
+Generate GPU utilization reports from sacct job data. Shows per-job
+efficiency metrics with optional time-weighted averages, summaries, and
+Telegraf output.
+.TP
+.B usage
+Show current GPU availability by type across the cluster. Supports
+per-user breakdowns and Telegraf output.
+.TP
+.B stat
+Monitor currently running jobs with real-time GPU and CPU statistics
+using sstat.
+.TP
+.B show-tres
+Display the dynamic TRES (Trackable Resource) ID-to-name mappings
+configured on the cluster.
+.SH REPORT OPTIONS
+.TP
+.BR \-S ", " \-\-starttime " " \fITIME\fR
+Start time for sacct query. Accepts dates (2026-01-15), relative
+keywords (yesterday, today), or Slurm time formats.
+.TP
+.BR \-E ", " \-\-endtime " " \fITIME\fR
+End time for sacct query.
+.TP
+.BR \-r ", " \-\-partition " " \fIPARTITION\fR
+Filter jobs by Slurm partition.
+.TP
+.BR \-A ", " \-\-account " " \fIACCOUNT\fR
+Filter jobs by Slurm account (comma-separated list).
+.TP
+.BR \-u ", " \-\-user " " \fIUSER\fR
+Query a specific user. Enables the time-weighted average row.
+.TP
+.BR \-a ", " \-\-allusers
+Query all users.
+.TP
+.BR \-j ", " \-\-jobs " " \fIJOBIDS\fR
+Comma-separated list of specific job IDs to query.
+.TP
+.BR \-g ", " \-\-gpu
+Only show jobs that request GPU resources.
+.TP
+.B \-\-gpu\-idle
+Show only jobs with GPU utilization < 50% or GPU memory efficiency < 50%.
+.TP
+.B \-\-summary
+Generate summary report grouped by user.
+.TP
+.B \-\-summary\-by\-partition
+Generate summary report grouped by user and partition.
+.TP
+.B \-\-summary\-by\-account
+Generate summary report grouped by user and account.
+.TP
+.B \-\-detailed
+Include node, GPU type, and account columns.
+.TP
+.B \-\-plain
+Use plain text output instead of rich formatting.
+.TP
+.B \-\-telegraf
+Output time-weighted average efficiency metrics in InfluxDB Line Protocol
+format for Telegraf ingestion. When used with
+.BR \-u ,
+outputs a single line for that user. When used with
+.BR \-a ,
+outputs one line per user. Ignored when combined with
+.B \-\-summary*
+flags.
+.IP
+Measurement name:
+.BR slurm_gpu_efficiency .
+Tags: user (always), partition (if
+.B \-r
+specified), account (if
+.B \-A
+specified). Fields: cpu_eff, mem_eff, gpu_eff, gpu_util, gpu_mem_eff, gpu_mem.
+Fields with no data default to 0.0 so every line has a consistent field set
+(required by Prometheus).
+.TP
+.B \-\-debug
+Enable debug output to stderr.
+.TP
+.BR \-o ", " \-\-output " " \fIFILE\fR
+Write report to file instead of stdout.
+.TP
+.BR \-\-filter\-state " " \fISTATE\fR
+Filter jobs by state: all, completed, failed, pending, running.
+Default: all.
+.TP
+.BR \-\-min\-gpu\-eff " " \fIVALUE\fR
+Only show jobs with GPU efficiency >= this value.
+.TP
+.BR \-\-max\-jobs " " \fIN\fR
+Maximum number of jobs to display.
+.TP
+.BR \-\-sort\-by " " \fIFIELD\fR
+Sort by: user, job_id, state, elapsed, gpu_eff, gpu_mem_eff, time_eff,
+cpu_eff, mem_eff. Default: job_id.
+.TP
+.B \-\-reverse
+Reverse sort order.
+.TP
+.B \-\-show\-partition
+Include partition column in the report. Default: true.
+.SH USAGE OPTIONS
+.TP
+.B \-\-plain
+Plain text output.
+.TP
+.B \-\-detailed
+Show detailed report with node names.
+.TP
+.BR \-r ", " \-\-partition " " \fIPARTITION\fR
+Show only nodes in the specified partition(s). Comma-separated.
+.TP
+.B \-k
+Shortcut for partitions: h200ea,education,gpu-common,scavenger-gpu.
+.TP
+.BR \-u ", " \-\-user " " \fIUSER\fR
+Show GPU usage for a specific user.
+.TP
+.BR \-a ", " \-\-all
+Show GPU usage breakdown by all users.
+.TP
+.B \-\-telegraf
+Output in InfluxDB Line Protocol format for Telegraf. Measurement name:
+.BR slurm_gpu_usage .
+.TP
+.B \-\-debug
+Enable debug output.
+.SH STAT OPTIONS
+.TP
+.B \-\-plain
+Plain text output.
+.TP
+.B \-\-detailed
+Include node and GPU type columns.
+.TP
+.BR \-u ", " \-\-user " " \fIUSER\fR
+Specific user to query. Auto-filters to current user for non-root.
+.TP
+.BR \-r ", " \-\-partition " " \fIPARTITION\fR
+Filter by Slurm partition.
+.TP
+.BR \-j ", " \-\-jobs " " \fIJOBIDS\fR
+Comma-separated list of specific job IDs.
+.TP
+.BR \-\-max\-jobs " " \fIN\fR
+Maximum number of jobs to display. Default: 50.
+.TP
+.BR \-\-sort\-by " " \fIFIELD\fR
+Sort by: user, job_id, elapsed, gpu_eff, gpu_mem_eff, time_eff,
+cpu_eff, mem_eff. Default: job_id.
+.TP
+.B \-\-reverse
+Reverse sort order.
+.TP
+.B \-\-debug
+Enable debug output.
+.SH REPORT COLUMNS
+.SS Job Reports
+.TP
+.B User
+Job owner.
+.TP
+.B JobID
+Slurm job identifier.
+.TP
+.B State
+Job state (COMPLETED, FAILED, RUNNING, CANCELLED, TIMEOUT, etc.).
+.TP
+.B Elapsed
+Job runtime in HH:MM:SS format.
+.TP
+.B TimeEff
+Time efficiency: elapsed time / time limit.
+.TP
+.B CPUEff
+CPU efficiency: CPU time used / CPU time allocated.
+.TP
+.B MemEff
+Memory efficiency: peak memory / allocated memory.
+.TP
+.B GPUEff
+GPU efficiency: normalized per-GPU average utilization.
+.TP
+.B GPUUtil
+Peak GPU utilization percentage (total across all GPUs).
+.TP
+.B GPUMemEff
+GPU memory efficiency: GPU memory used / total GPU memory capacity.
+.TP
+.B GPUMem
+Peak GPU memory usage.
+.TP
+.B Partition
+Slurm partition name.
+.SS Time-Weighted Average
+When filtering by a specific user (\fB\-u\fR), a WEIGHTED AVERAGE row
+appears at the bottom. Each metric is weighted by job elapsed time:
+.PP
+.nf
+  weighted_avg = sum(elapsed_time * value) / sum(elapsed_time)
+.fi
+.PP
+Longer-running jobs have proportionally more influence on the average.
+.SH TELEGRAF INTEGRATION
+The \fB\-\-telegraf\fR flag on both
+.B report
+and
+.B usage
+subcommands outputs data in InfluxDB Line Protocol. This allows direct
+ingestion by Telegraf using the
+.B exec
+input plugin.
+.SS Example: Per-User Efficiency (report)
+.PP
+.nf
+  [[inputs.exec]]
+    commands = [
+      "slurm-gpu report --telegraf -a -S yesterday -E today"
+    ]
+    data_format = "influx"
+    interval = "1h"
+.fi
+.PP
+Produces lines like:
+.PP
+.nf
+  slurm_gpu_efficiency,user=ukh cpu_eff=1.3,mem_eff=59.9,gpu_eff=100.0,gpu_util=100.0,gpu_mem_eff=89.7,gpu_mem=125.6 1738800000000000000
+.fi
+.SS Example: Cluster GPU Slots (usage)
+.PP
+.nf
+  [[inputs.exec]]
+    commands = ["slurm-gpu usage --telegraf"]
+    data_format = "influx"
+    interval = "5m"
+.fi
+.PP
+Produces lines like:
+.PP
+.nf
+  slurm_gpu_usage,gpu_type=h200 total=16i,used=12i,available=4i,utilization=75.00,node_count=2i 1738800000000000000
+.fi
+.SH EXAMPLES
+.TP
+Review yesterday's GPU jobs for a user:
+.B slurm-report -u jdoe -S yesterday -g
+.TP
+Find jobs wasting GPUs:
+.B slurm-report --gpu-idle --sort-by gpu_eff -S yesterday
+.TP
+Cluster GPU availability:
+.B slurm-usage --detailed
+.TP
+Monitor your running jobs:
+.B slurm-stat --detailed
+.TP
+Telegraf output for a user over a day:
+.B slurm-report --telegraf -u ukh -r h200alloc -S 2026-02-03 -E 2026-02-04
+.TP
+Telegraf output for all users:
+.B slurm-report --telegraf -a -S yesterday
+.SH ENVIRONMENT
+.B slurm-gpu
+requires that Slurm commands
+.BR sacct (1),
+.BR scontrol (1),
+and
+.BR squeue (1)
+are available in the PATH.
+.SH EXIT STATUS
+.TP
+.B 0
+Success.
+.TP
+.B 1
+Error (sacct failure, no matching jobs, I/O error).
+.SH AUTHORS
+Joe Shamblin <wjs@cs.duke.edu>
+.SH SEE ALSO
+.BR sacct (1),
+.BR scontrol (1),
+.BR squeue (1),
+.BR sstat (1),
+.BR telegraf (1)
