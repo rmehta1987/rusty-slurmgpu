@@ -136,7 +136,7 @@ pub fn calculate_metrics_for_jobs(jobs: &[SlurmJob], debug: bool) -> Vec<GPUMetr
     }
     let partition_limits = get_partition_time_limits(debug);
 
-    let mut metrics = Vec::new();
+    let mut metrics = Vec::with_capacity(jobs.len());
     let failed_jobs = 0;
 
     for (i, job) in jobs.iter().enumerate() {

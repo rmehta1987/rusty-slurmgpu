@@ -28,7 +28,7 @@ impl GPUReporter {
             return "No jobs found.".to_string();
         }
 
-        let mut lines = Vec::new();
+        let mut lines = Vec::with_capacity(metrics.len() + 4);
 
         // Build header
         let mut header_parts = vec![

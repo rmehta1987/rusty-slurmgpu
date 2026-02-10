@@ -17,7 +17,7 @@ pub struct PartitionTimeLimits {
 }
 
 /// Get default and max time limits for all partitions.
-pub fn get_partition_time_limits(debug: bool) -> HashMap<String, PartitionTimeLimits> {
+pub fn get_partition_time_limits(debug: bool) -> &'static HashMap<String, PartitionTimeLimits> {
     PARTITION_TIME_LIMITS_CACHE
         .get_or_init(|| {
             let mut partition_limits = HashMap::new();
@@ -82,7 +82,6 @@ pub fn get_partition_time_limits(debug: bool) -> HashMap<String, PartitionTimeLi
 
             partition_limits
         })
-        .clone()
 }
 
 /// Build a mapping of node names to GPU types using scontrol.
