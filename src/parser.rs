@@ -17,7 +17,8 @@ pub struct SlurmJobParser;
 
 impl SlurmJobParser {
     /// Parse sacct parseable format output from a file.
-    pub fn parse_file(file_path: &Path) -> Result<Vec<SlurmJob>, String> {
+    #[allow(dead_code)]
+    pub(crate) fn parse_file(file_path: &Path) -> Result<Vec<SlurmJob>, String> {
         let content = std::fs::read_to_string(file_path)
             .map_err(|e| format!("Failed to read file {}: {}", file_path.display(), e))?;
         Self::parse_string(&content)
@@ -464,7 +465,7 @@ impl SlurmJobParser {
     }
 
     /// Parse squeue output into job dictionaries.
-    pub fn parse_squeue_output(output: &str) -> Vec<HashMap<String, String>> {
+    pub(crate) fn parse_squeue_output(output: &str) -> Vec<HashMap<String, String>> {
         let mut jobs = Vec::new();
         let lines: Vec<&str> = output.trim().lines().collect();
 
@@ -507,7 +508,7 @@ impl SlurmJobParser {
     }
 
     /// Extract GPU count and type from TRES allocation string.
-    pub fn extract_gpu_info_from_tres(tres_str: &str) -> (i32, String) {
+    pub(crate) fn extract_gpu_info_from_tres(tres_str: &str) -> (i32, String) {
         let mut gpu_count = 0;
         let mut gpu_type = "unknown".to_string();
 

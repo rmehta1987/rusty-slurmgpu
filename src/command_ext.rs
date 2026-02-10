@@ -4,13 +4,13 @@ use std::sync::mpsc;
 use std::time::Duration;
 
 /// Default timeout for Slurm commands (30 seconds).
-pub const SLURM_COMMAND_TIMEOUT: Duration = Duration::from_secs(30);
+pub(crate) const SLURM_COMMAND_TIMEOUT: Duration = Duration::from_secs(30);
 
 /// Run a command with a timeout, returning an error if it takes too long.
 ///
 /// Spawns the command in a background thread and waits with a timeout.
 /// If the timeout expires, the process is killed and an error is returned.
-pub fn run_with_timeout(mut cmd: Command, timeout: Duration) -> io::Result<Output> {
+pub(crate) fn run_with_timeout(mut cmd: Command, timeout: Duration) -> io::Result<Output> {
     let child = cmd
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())

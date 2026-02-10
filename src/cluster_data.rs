@@ -3,7 +3,7 @@ use std::process::Command;
 use crate::command_ext::{run_with_timeout, SLURM_COMMAND_TIMEOUT};
 use crate::models::NodeInfo;
 
-pub struct ClusterDataCollector;
+pub(crate) struct ClusterDataCollector;
 
 impl ClusterDataCollector {
     /// Get node data from scontrol show node command.

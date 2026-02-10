@@ -6,7 +6,7 @@ use crate::models::QueuedJobInfo;
 use crate::parser::SlurmJobParser;
 
 /// Parse Slurm array task string and return count of pending tasks.
-pub fn parse_array_task_string(task_string: &str) -> i32 {
+pub(crate) fn parse_array_task_string(task_string: &str) -> i32 {
     if task_string.is_empty() {
         return 1;
     }
@@ -53,7 +53,7 @@ pub fn parse_array_task_string(task_string: &str) -> i32 {
     total.max(1) // At least 1 task
 }
 
-pub struct QueuedJobsCollector;
+pub(crate) struct QueuedJobsCollector;
 
 impl QueuedJobsCollector {
     /// Get detailed information about queued/pending jobs.

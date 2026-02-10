@@ -4,7 +4,7 @@ use crate::models::{
     CPUSlotsInfo, CPUTypeSummary, GPUSlotsInfo, GPUTypeSummary, QueueSummary, QueuedJobInfo,
 };
 
-pub struct ResourceSummarizer;
+pub(crate) struct ResourceSummarizer;
 
 impl ResourceSummarizer {
     /// Summarize GPU usage by type across all nodes.

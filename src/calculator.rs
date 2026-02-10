@@ -6,7 +6,7 @@ use crate::slurm_utils::PartitionTimeLimits;
 use crate::tres_parser::TresParser;
 
 /// GPU memory sizes in MB for different GPU types.
-pub fn gpu_memory_mb(gpu_type: &str) -> i64 {
+pub(crate) fn gpu_memory_mb(gpu_type: &str) -> i64 {
     match gpu_type {
         "a100" | "nvidia_a100-sxm4-80gb" => 81920,
         "a40" => 49152,
@@ -28,7 +28,7 @@ pub fn gpu_memory_mb(gpu_type: &str) -> i64 {
     }
 }
 
-pub struct EfficiencyCalculator;
+pub(crate) struct EfficiencyCalculator;
 
 impl EfficiencyCalculator {
     /// Format elapsed time in HH:MM:SS format.
@@ -727,14 +727,14 @@ impl EfficiencyCalculator {
 }
 
 #[derive(Debug, Clone)]
-pub struct AllocatedResources {
-    pub cpu: i32,
-    pub mem: i64,
-    pub gpu: i32,
+pub(crate) struct AllocatedResources {
+    pub(crate) cpu: i32,
+    pub(crate) mem: i64,
+    pub(crate) gpu: i32,
 }
 
 /// Format memory in MB to human-readable string.
-pub fn format_memory_string(memory_mb: f64) -> String {
+pub(crate) fn format_memory_string(memory_mb: f64) -> String {
     if memory_mb <= 0.0 {
         return "---".to_string();
     }

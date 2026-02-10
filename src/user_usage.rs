@@ -7,16 +7,16 @@ use crate::slurm_utils::build_node_gpu_mapping;
 use crate::tres_parser::TresParser;
 
 /// Combined resource usage data for all users.
-pub struct UserResourceUsage {
+pub(crate) struct UserResourceUsage {
     /// user -> {gpu_type: count}
-    pub gpu_usage: HashMap<String, HashMap<String, i32>>,
+    pub(crate) gpu_usage: HashMap<String, HashMap<String, i32>>,
     /// user -> cpu_count
-    pub cpu_usage: HashMap<String, i32>,
+    pub(crate) cpu_usage: HashMap<String, i32>,
     /// user -> memory_mb
-    pub memory_usage: HashMap<String, i64>,
+    pub(crate) memory_usage: HashMap<String, i64>,
 }
 
-pub struct UserUsageAnalyzer;
+pub(crate) struct UserUsageAnalyzer;
 
 impl UserUsageAnalyzer {
     /// Get GPU usage by type for a specific user.

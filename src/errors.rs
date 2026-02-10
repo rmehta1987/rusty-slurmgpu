@@ -2,7 +2,8 @@ use std::collections::HashMap;
 use thiserror::Error;
 
 #[derive(Error, Debug)]
-pub enum GpuReportError {
+#[allow(dead_code)]
+pub(crate) enum GpuReportError {
     #[error("Slurm command '{command}' failed with exit code {exit_code}")]
     SlurmCommand {
         command: String,
@@ -27,6 +28,7 @@ pub enum GpuReportError {
     },
 }
 
+#[allow(dead_code)]
 impl GpuReportError {
     pub fn slurm_command(command: &str, exit_code: i32, stderr: &str, stdout: &str) -> Self {
         Self::SlurmCommand {

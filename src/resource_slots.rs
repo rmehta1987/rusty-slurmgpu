@@ -4,7 +4,7 @@ use crate::cluster_data::ClusterDataCollector;
 use crate::gres_parser::GresParser;
 use crate::models::{CPUSlotsInfo, GPUSlotsInfo};
 
-pub struct ResourceSlotCollector;
+pub(crate) struct ResourceSlotCollector;
 
 impl ResourceSlotCollector {
     /// Collect GPU slot information from all nodes.

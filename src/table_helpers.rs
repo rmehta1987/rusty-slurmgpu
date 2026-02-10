@@ -7,7 +7,7 @@ use crate::constants::{
 };
 
 /// Create a new table with the standard preset and arrangement.
-pub fn new_table() -> Table {
+pub(crate) fn new_table() -> Table {
     let mut table = Table::new();
     table
         .load_preset(UTF8_FULL_CONDENSED)
@@ -16,19 +16,19 @@ pub fn new_table() -> Table {
 }
 
 /// Create a bold white left-aligned header cell.
-pub fn hdr(name: &str) -> Cell {
+pub(crate) fn hdr(name: &str) -> Cell {
     Cell::new(name)
         .add_attribute(Attribute::Bold)
         .fg(Color::White)
 }
 
 /// Create a bold white right-aligned header cell.
-pub fn hdr_right(name: &str) -> Cell {
+pub(crate) fn hdr_right(name: &str) -> Cell {
     hdr(name).set_alignment(CellAlignment::Right)
 }
 
 /// Get color for efficiency percentage.
-pub fn efficiency_color(value: &str) -> Color {
+pub(crate) fn efficiency_color(value: &str) -> Color {
     if value == NO_DATA || value.is_empty() {
         return Color::White;
     }
@@ -42,7 +42,7 @@ pub fn efficiency_color(value: &str) -> Color {
 }
 
 /// Check if efficiency value is critically low (< 30%) for bold formatting.
-pub fn is_critical_efficiency(value: &str) -> bool {
+pub(crate) fn is_critical_efficiency(value: &str) -> bool {
     if value == NO_DATA || value.is_empty() {
         return false;
     }
@@ -53,7 +53,7 @@ pub fn is_critical_efficiency(value: &str) -> bool {
 }
 
 /// Create a cell with efficiency color, adding bold for critical values.
-pub fn efficiency_cell(value: &str) -> Cell {
+pub(crate) fn efficiency_cell(value: &str) -> Cell {
     let cell = Cell::new(value)
         .fg(efficiency_color(value))
         .set_alignment(CellAlignment::Right);
@@ -65,7 +65,7 @@ pub fn efficiency_cell(value: &str) -> Cell {
 }
 
 /// Get color for job state.
-pub fn state_color(state: &str) -> Color {
+pub(crate) fn state_color(state: &str) -> Color {
     match state.to_uppercase().as_str() {
         "COMPLETED" => Color::Green,
         "FAILED" => Color::Red,
@@ -78,7 +78,7 @@ pub fn state_color(state: &str) -> Color {
 
 /// Get color for resource utilization percentage.
 /// High utilization = Green (healthy), Low = Red (underused or needs attention).
-pub fn utilization_color(util_percent: f64) -> Color {
+pub(crate) fn utilization_color(util_percent: f64) -> Color {
     if util_percent >= EXCELLENT_EFFICIENCY_THRESHOLD {
         Color::Green
     } else if util_percent >= GOOD_EFFICIENCY_THRESHOLD {

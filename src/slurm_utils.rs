@@ -11,13 +11,14 @@ use crate::models::{GPUMetrics, SummaryMetrics};
 static PARTITION_TIME_LIMITS_CACHE: OnceLock<HashMap<String, PartitionTimeLimits>> = OnceLock::new();
 
 #[derive(Debug, Clone)]
-pub struct PartitionTimeLimits {
-    pub default_minutes: Option<i64>,
-    pub max_minutes: Option<i64>,
+#[allow(dead_code)]
+pub(crate) struct PartitionTimeLimits {
+    pub(crate) default_minutes: Option<i64>,
+    pub(crate) max_minutes: Option<i64>,
 }
 
 /// Get default and max time limits for all partitions.
-pub fn get_partition_time_limits(debug: bool) -> &'static HashMap<String, PartitionTimeLimits> {
+pub(crate) fn get_partition_time_limits(debug: bool) -> &'static HashMap<String, PartitionTimeLimits> {
     PARTITION_TIME_LIMITS_CACHE
         .get_or_init(|| {
             let mut partition_limits = HashMap::new();
@@ -151,7 +152,7 @@ pub fn build_node_gpu_mapping(debug: bool) -> HashMap<String, String> {
 }
 
 /// Run sacct command and return parseable format output.
-pub fn run_sacct(
+pub(crate) fn run_sacct(
     start_time: Option<&str>,
     end_time: Option<&str>,
     partition: Option<&str>,
@@ -334,7 +335,7 @@ pub fn sort_metrics(metrics: &mut Vec<GPUMetrics>, sort_by: &str, reverse: bool)
 }
 
 /// Sort summary metrics by specified field.
-pub fn sort_summary_metrics(summaries: &mut Vec<SummaryMetrics>, sort_by: &str, reverse: bool) {
+pub(crate) fn sort_summary_metrics(summaries: &mut Vec<SummaryMetrics>, sort_by: &str, reverse: bool) {
     summaries.sort_by(|a, b| {
         let cmp = match sort_by {
             "user" => a.user.cmp(&b.user),

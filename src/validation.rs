@@ -1,7 +1,7 @@
 use once_cell::sync::Lazy;
 use regex::Regex;
 
-use crate::constants::{MIN_VALID_JOB_ID, VALID_JOB_STATES};
+use crate::constants::MIN_VALID_JOB_ID;
 use crate::errors::GpuReportError;
 
 static USERNAME_PATTERN: Lazy<Regex> =
@@ -13,7 +13,7 @@ const FORBIDDEN_CHARS: &[char] = &[
     '$', '`', ';', '|', '&', '>', '<', '(', ')', '{', '}', '[', ']', '*', '?', '~', '!', '#',
 ];
 
-pub struct InputValidator;
+pub(crate) struct InputValidator;
 
 impl InputValidator {
     /// Validate and parse comma-separated job IDs.
@@ -124,6 +124,7 @@ impl InputValidator {
     }
 
     /// Validate and parse comma-separated account names securely.
+    #[allow(dead_code)]
     pub fn validate_account_list(accounts: &str) -> Result<Option<Vec<String>>, GpuReportError> {
         Self::validate_name_list(accounts, "account names")
     }
@@ -217,6 +218,7 @@ impl InputValidator {
     }
 
     /// Validate sort field name.
+    #[allow(dead_code)]
     pub fn validate_sort_field(
         sort_by: &str,
         valid_fields: &[&str],
@@ -244,6 +246,7 @@ impl InputValidator {
     }
 
     /// Validate maximum number of jobs to display.
+    #[allow(dead_code)]
     pub fn validate_max_jobs(max_jobs: i32) -> Result<i32, GpuReportError> {
         if max_jobs <= 0 {
             return Err(GpuReportError::configuration(
@@ -263,6 +266,7 @@ impl InputValidator {
     }
 
     /// Validate efficiency threshold percentage.
+    #[allow(dead_code)]
     pub fn validate_efficiency_threshold(threshold: f64) -> Result<f64, GpuReportError> {
         if !(0.0..=100.0).contains(&threshold) {
             return Err(GpuReportError::configuration(
@@ -275,37 +279,29 @@ impl InputValidator {
     }
 }
 
-pub struct SystemValidator;
+#[allow(dead_code)]
+pub(crate) struct SystemValidator;
 
+#[allow(dead_code)]
 impl SystemValidator {
-    /// Validate job state string.
+    /// Validate job state string using the JobState enum.
     pub fn validate_job_state(state: &str) -> Result<Option<String>, GpuReportError> {
+        use crate::models::JobState;
         let trimmed = state.trim();
         if trimmed.is_empty() {
             return Ok(None);
         }
 
-        let upper = trimmed.to_uppercase();
-        if !VALID_JOB_STATES.contains(upper.as_str()) {
+        let parsed = JobState::from(trimmed);
+        if matches!(parsed, JobState::Other(_)) {
             return Err(GpuReportError::configuration(
                 "job state",
-                &format!("Invalid job state: '{}'", upper),
-                Some(&format!(
-                    "Use one of: {}",
-                    {
-                        let mut states: Vec<_> = VALID_JOB_STATES.iter().collect();
-                        states.sort();
-                        states
-                            .iter()
-                            .map(|s| s.to_string())
-                            .collect::<Vec<_>>()
-                            .join(", ")
-                    }
-                )),
+                &format!("Invalid job state: '{}'", trimmed),
+                Some("Use one of: CANCELLED, COMPLETED, FAILED, NODE_FAIL, PENDING, PREEMPTED, RUNNING, TIMEOUT"),
             ));
         }
 
-        Ok(Some(upper))
+        Ok(Some(parsed.to_string()))
     }
 }
 

@@ -6,18 +6,11 @@ static GPU_PATTERN: Lazy<Regex> =
 static GPU_DETAILS_PATTERN: Lazy<Regex> =
     Lazy::new(|| Regex::new(r"gpu:([^:,]+):(\d+)\([^)]*\)").unwrap());
 
-pub struct GresParser;
+pub(crate) struct GresParser;
 
 impl GresParser {
     /// Parse GRES string to extract GPU types and total counts.
-    ///
-    /// # Examples
-    /// ```
-    /// use slurm_gpu_reporter::gres_parser::GresParser;
-    /// let result = GresParser::parse_gres_string("gpu:p100:4(S:0-1)");
-    /// assert_eq!(result, vec![("p100".to_string(), 4)]);
-    /// ```
-    pub fn parse_gres_string(gres: &str) -> Vec<(String, i32)> {
+    pub(crate) fn parse_gres_string(gres: &str) -> Vec<(String, i32)> {
         let mut gpu_info = Vec::new();
         if gres.is_empty() || !gres.contains("gpu:") {
             return gpu_info;
@@ -43,14 +36,7 @@ impl GresParser {
     }
 
     /// Parse GRES used string to extract GPU types and used counts.
-    ///
-    /// # Examples
-    /// ```
-    /// use slurm_gpu_reporter::gres_parser::GresParser;
-    /// let result = GresParser::parse_gres_used_string("gpu:p100:4(IDX:0-3)");
-    /// assert_eq!(result, vec![("p100".to_string(), 4)]);
-    /// ```
-    pub fn parse_gres_used_string(gres_used: &str) -> Vec<(String, i32)> {
+    pub(crate) fn parse_gres_used_string(gres_used: &str) -> Vec<(String, i32)> {
         let mut gpu_used = Vec::new();
         if gres_used.is_empty() || !gres_used.contains("gpu:") {
             return gpu_used;
