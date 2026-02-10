@@ -1,13 +1,10 @@
 use std::collections::{HashMap, HashSet};
 
-use comfy_table::{
-    presets::UTF8_FULL_CONDENSED, Attribute, Cell, CellAlignment, Color,
-    ContentArrangement, Table,
-};
+use comfy_table::{Attribute, Cell, CellAlignment, Color, Table};
 
-use crate::constants::*;
 use crate::models::*;
 use crate::queued_jobs::QueuedJobsCollector;
+use crate::table_helpers::*;
 use crate::resource_slots::ResourceSlotCollector;
 use crate::resource_summary::ResourceSummarizer;
 use crate::tres_parser::TresParser;
@@ -151,13 +148,7 @@ impl GPUUsageReporter {
         queued_gpus: i32,
         queued_job_count: usize,
     ) -> Table {
-        let mut table = Table::new();
-        table
-            .load_preset(UTF8_FULL_CONDENSED)
-            .set_content_arrangement(ContentArrangement::Dynamic);
-
-        let hdr = |name: &str| Cell::new(name).add_attribute(Attribute::Bold).fg(Color::White);
-        let hdr_right = |name: &str| hdr(name).set_alignment(CellAlignment::Right);
+        let mut table = new_table();
 
         table.set_header(vec![
             hdr("GPU Type"),
@@ -255,13 +246,7 @@ impl GPUUsageReporter {
         cpu_summary: &CPUTypeSummary,
         queue_summary: &QueueSummary,
     ) -> Table {
-        let mut table = Table::new();
-        table
-            .load_preset(UTF8_FULL_CONDENSED)
-            .set_content_arrangement(ContentArrangement::Dynamic);
-
-        let hdr = |name: &str| Cell::new(name).add_attribute(Attribute::Bold).fg(Color::White);
-        let hdr_right = |name: &str| hdr(name).set_alignment(CellAlignment::Right);
+        let mut table = new_table();
 
         table.set_header(vec![
             hdr("Resource Type"),
@@ -274,7 +259,7 @@ impl GPUUsageReporter {
 
         // Add GPU rows
         for summary in gpu_summaries {
-            let util_color = Self::get_utilization_color(summary.utilization_percent());
+            let util_color = utilization_color(summary.utilization_percent());
             table.add_row(vec![
                 Cell::new(format!("GPUs ({})", summary.gpu_type)).fg(Color::Cyan),
                 Cell::new(summary.total_gpus.to_string()).set_alignment(CellAlignment::Right),
@@ -300,7 +285,7 @@ impl GPUUsageReporter {
             .flat_map(|s| s.nodes_with_type.iter())
             .collect::<HashSet<_>>()
             .len();
-        let gpu_util_color = Self::get_utilization_color(gpu_util);
+        let gpu_util_color = utilization_color(gpu_util);
 
         table.add_row(vec![
             Cell::new("GPUs (TOTAL)").add_attribute(Attribute::Bold),
@@ -315,7 +300,7 @@ impl GPUUsageReporter {
         ]);
 
         // CPU row
-        let cpu_util_color = Self::get_utilization_color(cpu_summary.utilization_percent());
+        let cpu_util_color = utilization_color(cpu_summary.utilization_percent());
         table.add_row(vec![
             Cell::new("CPUs (TOTAL)")
                 .add_attribute(Attribute::Bold)
@@ -462,13 +447,7 @@ impl GPUUsageReporter {
         queued_jobs_by_user: &HashMap<String, usize>,
         all_users_memory_data: &HashMap<String, i64>,
     ) -> Table {
-        let mut table = Table::new();
-        table
-            .load_preset(UTF8_FULL_CONDENSED)
-            .set_content_arrangement(ContentArrangement::Dynamic);
-
-        let hdr = |name: &str| Cell::new(name).add_attribute(Attribute::Bold).fg(Color::White);
-        let hdr_right = |name: &str| hdr(name).set_alignment(CellAlignment::Right);
+        let mut table = new_table();
 
         table.set_header(vec![
             hdr("User"),
@@ -969,14 +948,4 @@ impl GPUUsageReporter {
         lines.join("\n")
     }
 
-    /// Get color for utilization (inverted - high utilization = less availability)
-    fn get_utilization_color(util_percent: f64) -> Color {
-        if util_percent >= EXCELLENT_EFFICIENCY_THRESHOLD {
-            Color::Red // High utilization = less availability
-        } else if util_percent >= GOOD_EFFICIENCY_THRESHOLD {
-            Color::Yellow
-        } else {
-            Color::Green // Low utilization = high availability
-        }
-    }
 }

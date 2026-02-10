@@ -1,66 +1,20 @@
-use comfy_table::{presets::UTF8_FULL_CONDENSED, Table, ContentArrangement, Cell, CellAlignment, Color, Attribute};
+use comfy_table::{Attribute, Cell, CellAlignment, Color, Table};
 
 use crate::calculator::EfficiencyCalculator;
-use crate::constants::*;
 use crate::models::{GPUMetrics, SummaryMetrics};
+use crate::table_helpers::*;
 
 pub struct GPUReporter;
 
 impl GPUReporter {
-    /// Get color for efficiency percentage.
+    /// Get color for efficiency percentage (delegates to table_helpers).
     pub fn get_efficiency_color(value: &str) -> Color {
-        if value == "---" || value.is_empty() {
-            return Color::White;
-        }
-
-        let num_value = match value.trim_end_matches('%').parse::<f64>() {
-            Ok(v) => v,
-            Err(_) => return Color::White,
-        };
-
-        if num_value >= EXCELLENT_EFFICIENCY_THRESHOLD {
-            Color::Green
-        } else if num_value >= GOOD_EFFICIENCY_THRESHOLD {
-            Color::Yellow
-        } else {
-            Color::Red
-        }
+        efficiency_color(value)
     }
 
-    /// Check if efficiency value is critically low (< 30%) for bold formatting.
-    pub fn is_critical_efficiency(value: &str) -> bool {
-        if value == "---" || value.is_empty() {
-            return false;
-        }
-        match value.trim_end_matches('%').parse::<f64>() {
-            Ok(v) => v < POOR_EFFICIENCY_THRESHOLD,
-            Err(_) => false,
-        }
-    }
-
-    /// Create a cell with efficiency color, adding bold for critical values.
-    fn efficiency_cell(value: &str) -> Cell {
-        let cell = Cell::new(value)
-            .fg(Self::get_efficiency_color(value))
-            .set_alignment(CellAlignment::Right);
-        if Self::is_critical_efficiency(value) {
-            cell.add_attribute(Attribute::Bold)
-        } else {
-            cell
-        }
-    }
-
-    /// Get color for job state.
+    /// Get color for job state (delegates to table_helpers).
     pub fn get_state_color(state: &str) -> Color {
-        match state.to_uppercase().as_str() {
-            "COMPLETED" => Color::Green,
-            "FAILED" => Color::Red,
-            "CANCELLED" => Color::Yellow,
-            "TIMEOUT" => Color::Yellow,
-            "PENDING" => Color::Blue,
-            "RUNNING" => Color::Cyan,
-            _ => Color::White,
-        }
+        state_color(state)
     }
 
     /// Format metrics into a plain text table report.
@@ -188,14 +142,7 @@ impl GPUReporter {
         detailed: bool,
         show_weighted_avg: bool,
     ) -> Table {
-        let mut table = Table::new();
-        table
-            .load_preset(UTF8_FULL_CONDENSED)
-            .set_content_arrangement(ContentArrangement::Dynamic);
-
-        // Build header row — white + bold for clean contrast
-        let hdr = |name: &str| Cell::new(name).add_attribute(Attribute::Bold).fg(Color::White);
-        let hdr_right = |name: &str| hdr(name).set_alignment(CellAlignment::Right);
+        let mut table = new_table();
 
         let mut headers: Vec<Cell> = vec![
             hdr("User"),
@@ -228,14 +175,14 @@ impl GPUReporter {
             let mut row: Vec<Cell> = vec![
                 Cell::new(&metric.user).fg(Color::Magenta),
                 Cell::new(metric.job_id.to_string()).fg(Color::Cyan),
-                Cell::new(&metric.state).fg(Self::get_state_color(&metric.state)),
+                Cell::new(&metric.state).fg(state_color(&metric.state)),
                 Cell::new(&metric.elapsed).set_alignment(CellAlignment::Right),
-                Self::efficiency_cell(&metric.time_eff),
-                Self::efficiency_cell(&metric.cpu_eff),
-                Self::efficiency_cell(&metric.mem_eff),
-                Self::efficiency_cell(&metric.gpu_eff),
-                Self::efficiency_cell(&metric.gpu_util),
-                Self::efficiency_cell(&metric.gpu_mem_eff),
+                efficiency_cell(&metric.time_eff),
+                efficiency_cell(&metric.cpu_eff),
+                efficiency_cell(&metric.mem_eff),
+                efficiency_cell(&metric.gpu_eff),
+                efficiency_cell(&metric.gpu_util),
+                efficiency_cell(&metric.gpu_mem_eff),
                 Cell::new(&metric.gpu_mem).set_alignment(CellAlignment::Right),
             ];
 
@@ -267,12 +214,12 @@ impl GPUReporter {
                 Cell::new("").add_attribute(Attribute::Bold),
                 Cell::new("WEIGHTED AVG").add_attribute(Attribute::Bold).fg(Color::Cyan),
                 Cell::new(&weighted_avg.elapsed).add_attribute(Attribute::Bold).set_alignment(CellAlignment::Right),
-                Self::efficiency_cell(&weighted_avg.time_eff).add_attribute(Attribute::Bold),
-                Self::efficiency_cell(&weighted_avg.cpu_eff).add_attribute(Attribute::Bold),
-                Self::efficiency_cell(&weighted_avg.mem_eff).add_attribute(Attribute::Bold),
-                Self::efficiency_cell(&weighted_avg.gpu_eff).add_attribute(Attribute::Bold),
-                Self::efficiency_cell(&weighted_avg.gpu_util).add_attribute(Attribute::Bold),
-                Self::efficiency_cell(&weighted_avg.gpu_mem_eff).add_attribute(Attribute::Bold),
+                efficiency_cell(&weighted_avg.time_eff).add_attribute(Attribute::Bold),
+                efficiency_cell(&weighted_avg.cpu_eff).add_attribute(Attribute::Bold),
+                efficiency_cell(&weighted_avg.mem_eff).add_attribute(Attribute::Bold),
+                efficiency_cell(&weighted_avg.gpu_eff).add_attribute(Attribute::Bold),
+                efficiency_cell(&weighted_avg.gpu_util).add_attribute(Attribute::Bold),
+                efficiency_cell(&weighted_avg.gpu_mem_eff).add_attribute(Attribute::Bold),
                 Cell::new(&weighted_avg.gpu_mem).add_attribute(Attribute::Bold).set_alignment(CellAlignment::Right),
             ];
 
@@ -392,13 +339,7 @@ impl GPUReporter {
         by_account: bool,
         account_only: bool,
     ) -> Table {
-        let mut table = Table::new();
-        table
-            .load_preset(UTF8_FULL_CONDENSED)
-            .set_content_arrangement(ContentArrangement::Dynamic);
-
-        let hdr = |name: &str| Cell::new(name).add_attribute(Attribute::Bold).fg(Color::White);
-        let hdr_right = |name: &str| hdr(name).set_alignment(CellAlignment::Right);
+        let mut table = new_table();
 
         let mut headers: Vec<Cell> = Vec::new();
 
@@ -452,9 +393,9 @@ impl GPUReporter {
                 Cell::new(summary.failed_jobs.to_string()).set_alignment(CellAlignment::Right),
                 Cell::new(summary.running_jobs.to_string()).set_alignment(CellAlignment::Right),
                 Cell::new(summary.pending_jobs.to_string()).set_alignment(CellAlignment::Right),
-                Self::efficiency_cell(&gpu_eff_str),
-                Self::efficiency_cell(&gpu_mem_str),
-                Self::efficiency_cell(&time_eff_str),
+                efficiency_cell(&gpu_eff_str),
+                efficiency_cell(&gpu_mem_str),
+                efficiency_cell(&time_eff_str),
             ]);
 
             table.add_row(row);
