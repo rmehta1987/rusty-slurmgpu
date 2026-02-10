@@ -94,7 +94,27 @@ pub fn fetch_and_parse_jobs(options: &ReportOptions) -> Result<Vec<SlurmJob>> {
         .map_err(|e| anyhow::anyhow!("Failed to parse sacct output: {}", e))?;
 
     if all_jobs.is_empty() {
-        bail!("No valid jobs found");
+        let mut hints = Vec::new();
+        if options.starttime.is_some() || options.endtime.is_some() {
+            hints.push("Try a wider time range (e.g., --starttime=2025-01-01)");
+        } else {
+            hints.push("Try specifying --starttime (default is last 24 hours)");
+        }
+        if options.partition_filter.is_some() {
+            hints.push("Remove --partition to search all partitions");
+        }
+        if options.user.is_some() {
+            hints.push("Remove -u to search all users, or use -a/--allusers");
+        }
+        if options.jobs.is_some() {
+            hints.push("Verify the job IDs exist with: sacct -j <id>");
+        }
+        let suggestion = if hints.is_empty() {
+            String::new()
+        } else {
+            format!("\nSuggestions:\n  {}", hints.join("\n  "))
+        };
+        bail!("No valid jobs found.{}", suggestion);
     }
 
     if options.debug {
@@ -166,6 +186,7 @@ pub fn filter_gpu_jobs(jobs: Vec<SlurmJob>, debug: bool) -> Vec<SlurmJob> {
 
     if gpu_jobs.is_empty() {
         eprintln!("No jobs requesting GPU resources found.");
+        eprintln!("  Hint: Remove --gpu to see all jobs, or try a wider time range.");
     }
 
     gpu_jobs
@@ -231,7 +252,20 @@ pub fn filter_metrics(metrics: Vec<GPUMetrics>, options: &ReportOptions) -> Vec<
     }
 
     if metrics.is_empty() {
+        let mut hints = Vec::new();
+        if options.filter_state != "all" {
+            hints.push(format!("Remove --filter-state (currently '{}')", options.filter_state));
+        }
+        if options.min_gpu_eff.is_some() {
+            hints.push("Lower or remove --min-gpu-eff threshold".to_string());
+        }
+        if options.gpu_idle {
+            hints.push("Remove --gpu-idle to see all utilization levels".to_string());
+        }
         eprintln!("No jobs match the specified filters.");
+        for hint in &hints {
+            eprintln!("  Hint: {}", hint);
+        }
     }
 
     // Limit number of jobs

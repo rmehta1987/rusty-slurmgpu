@@ -445,7 +445,16 @@ fn run_stat(args: StatArgs) {
     );
 
     if metrics.is_empty() {
-        eprintln!("No jobs found matching the criteria.");
+        eprintln!("No running jobs found matching the criteria.");
+        if args.user.is_some() {
+            eprintln!("  Hint: Remove -u to see all users' jobs.");
+        }
+        if args.partition_filter.is_some() {
+            eprintln!("  Hint: Remove --partition to search all partitions.");
+        }
+        if job_ids.is_some() {
+            eprintln!("  Hint: Verify job IDs are currently running (sstat requires RUNNING jobs).");
+        }
         return;
     }
 
