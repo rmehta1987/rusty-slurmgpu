@@ -1,12 +1,13 @@
 use std::collections::HashMap;
 use std::process::Command;
+use std::sync::OnceLock;
 
 use crate::constants::{SECONDS_PER_HOUR, SECONDS_PER_MINUTE};
 use crate::errors::GpuReportError;
 use crate::models::{GPUMetrics, SummaryMetrics};
 
-/// Cache for partition time limits.
-static mut PARTITION_TIME_LIMITS_CACHE: Option<HashMap<String, PartitionTimeLimits>> = None;
+/// Cache for partition time limits (thread-safe, initialized once).
+static PARTITION_TIME_LIMITS_CACHE: OnceLock<HashMap<String, PartitionTimeLimits>> = OnceLock::new();
 
 #[derive(Debug, Clone)]
 pub struct PartitionTimeLimits {
@@ -16,77 +17,71 @@ pub struct PartitionTimeLimits {
 
 /// Get default and max time limits for all partitions.
 pub fn get_partition_time_limits(debug: bool) -> HashMap<String, PartitionTimeLimits> {
-    // Return cached data if available (unsafe but single-threaded CLI tool)
-    unsafe {
-        if let Some(ref cache) = PARTITION_TIME_LIMITS_CACHE {
-            return cache.clone();
-        }
-    }
+    PARTITION_TIME_LIMITS_CACHE
+        .get_or_init(|| {
+            let mut partition_limits = HashMap::new();
 
-    let mut partition_limits = HashMap::new();
+            match Command::new("scontrol")
+                .args(["show", "partition", "--json"])
+                .output()
+            {
+                Ok(output) if output.status.success() => {
+                    let stdout = String::from_utf8_lossy(&output.stdout);
+                    if let Ok(data) = serde_json::from_str::<serde_json::Value>(&stdout) {
+                        if let Some(partitions) =
+                            data.get("partitions").and_then(|v| v.as_array())
+                        {
+                            for partition in partitions {
+                                let name = partition
+                                    .get("name")
+                                    .and_then(|v| v.as_str())
+                                    .unwrap_or("")
+                                    .to_string();
 
-    match Command::new("scontrol")
-        .args(["show", "partition", "--json"])
-        .output()
-    {
-        Ok(output) if output.status.success() => {
-            let stdout = String::from_utf8_lossy(&output.stdout);
-            if let Ok(data) = serde_json::from_str::<serde_json::Value>(&stdout) {
-                if let Some(partitions) = data.get("partitions").and_then(|v| v.as_array()) {
-                    for partition in partitions {
-                        let name = partition
-                            .get("name")
-                            .and_then(|v| v.as_str())
-                            .unwrap_or("")
-                            .to_string();
+                                let default_minutes = partition
+                                    .get("default_time")
+                                    .and_then(|v| v.get("number"))
+                                    .and_then(|v| v.as_i64());
 
-                        let default_minutes = partition
-                            .get("default_time")
-                            .and_then(|v| v.get("number"))
-                            .and_then(|v| v.as_i64());
+                                let max_minutes = partition
+                                    .get("max_time")
+                                    .and_then(|v| v.get("number"))
+                                    .and_then(|v| v.as_i64());
 
-                        let max_minutes = partition
-                            .get("max_time")
-                            .and_then(|v| v.get("number"))
-                            .and_then(|v| v.as_i64());
+                                if debug && default_minutes.is_some() {
+                                    eprintln!(
+                                        "Debug: Partition {} - Default: {:?} min, Max: {:?} min",
+                                        name, default_minutes, max_minutes
+                                    );
+                                }
 
-                        if debug && default_minutes.is_some() {
-                            eprintln!(
-                                "Debug: Partition {} - Default: {:?} min, Max: {:?} min",
-                                name, default_minutes, max_minutes
-                            );
+                                partition_limits.insert(
+                                    name,
+                                    PartitionTimeLimits {
+                                        default_minutes,
+                                        max_minutes,
+                                    },
+                                );
+                            }
                         }
-
-                        partition_limits.insert(
-                            name,
-                            PartitionTimeLimits {
-                                default_minutes,
-                                max_minutes,
-                            },
-                        );
+                    }
+                }
+                Ok(output) => {
+                    if debug {
+                        let stderr = String::from_utf8_lossy(&output.stderr);
+                        eprintln!("Warning: scontrol partition failed: {}", stderr);
+                    }
+                }
+                Err(e) => {
+                    if debug {
+                        eprintln!("Warning: Failed to run scontrol: {}", e);
                     }
                 }
             }
-        }
-        Ok(output) => {
-            if debug {
-                let stderr = String::from_utf8_lossy(&output.stderr);
-                eprintln!("Warning: scontrol partition failed: {}", stderr);
-            }
-        }
-        Err(e) => {
-            if debug {
-                eprintln!("Warning: Failed to run scontrol: {}", e);
-            }
-        }
-    }
 
-    // Cache the results
-    unsafe {
-        PARTITION_TIME_LIMITS_CACHE = Some(partition_limits.clone());
-    }
-
-    partition_limits
+            partition_limits
+        })
+        .clone()
 }
 
 /// Build a mapping of node names to GPU types using scontrol.
