@@ -8,6 +8,7 @@ use slurm_gpu_reporter::reporter::GPUReporter;
 use slurm_gpu_reporter::slurm_utils::{build_node_gpu_mapping, sort_metrics};
 use slurm_gpu_reporter::sstat::SstatMonitor;
 use slurm_gpu_reporter::tres_registry::TresRegistry;
+use slurm_gpu_reporter::tui::{self, TuiConfig};
 
 #[derive(Parser)]
 #[command(
@@ -37,6 +38,28 @@ enum Commands {
 
     /// Show dynamic TRES ID mappings for this cluster
     ShowTres,
+
+    /// Launch interactive TUI dashboard
+    Tui(TuiArgs),
+}
+
+#[derive(Parser, Debug)]
+pub struct TuiArgs {
+    /// Slurm partition to filter
+    #[arg(short = 'r', long = "partition")]
+    partition: Option<String>,
+
+    /// Specific user to query
+    #[arg(short = 'u', long)]
+    user: Option<String>,
+
+    /// Start time for report tab (e.g., yesterday, today)
+    #[arg(short = 'S', long)]
+    starttime: Option<String>,
+
+    /// Auto-refresh interval in seconds (default: 30)
+    #[arg(long, default_value_t = 30)]
+    refresh: u64,
 }
 
 #[derive(Parser, Debug)]
@@ -193,8 +216,8 @@ pub struct StatArgs {
     #[arg(short = 'j', long)]
     jobs: Option<String>,
 
-    /// Maximum number of jobs to display (default: 50)
-    #[arg(long, default_value_t = 50)]
+    /// Maximum number of jobs to display (0 = unlimited, default: 100)
+    #[arg(long, default_value_t = 100)]
     max_jobs: usize,
 
     /// Sort jobs by specified field
@@ -223,7 +246,7 @@ fn main() -> Result<()> {
     match binary_name {
         "slurm-report" => {
             let args = ReportArgs::parse();
-            run_report(args);
+            run_report(args)?;
             return Ok(());
         }
         "slurm-usage" => {
@@ -240,6 +263,11 @@ fn main() -> Result<()> {
             run_show_tres();
             return Ok(());
         }
+        "slurm-tui" => {
+            let args = TuiArgs::parse();
+            run_tui(args)?;
+            return Ok(());
+        }
         _ => {}
     }
 
@@ -247,10 +275,11 @@ fn main() -> Result<()> {
     let cli = Cli::parse();
 
     match cli.command {
-        Some(Commands::Report(args)) => run_report(args),
+        Some(Commands::Report(args)) => run_report(args)?,
         Some(Commands::Usage(args)) => run_usage(args),
         Some(Commands::Stat(args)) => run_stat(args),
         Some(Commands::ShowTres) => run_show_tres(),
+        Some(Commands::Tui(args)) => run_tui(args)?,
         None => {
             println!("slurm-gpu: GPU utilization reporting for Slurm");
             println!("Use --help for usage information");
@@ -260,19 +289,21 @@ fn main() -> Result<()> {
             println!("  usage       Show current GPU usage by type");
             println!("  stat        Monitor running jobs with real-time stats");
             println!("  show-tres   Show dynamic TRES ID mappings");
+            println!("  tui         Launch interactive TUI dashboard");
             println!();
             println!("Symlink shortcuts:");
             println!("  slurm-report     -> slurm-gpu report");
             println!("  slurm-usage      -> slurm-gpu usage");
             println!("  slurm-stat       -> slurm-gpu stat");
             println!("  slurm-show-tres  -> slurm-gpu show-tres");
+            println!("  slurm-tui        -> slurm-gpu tui");
         }
     }
 
     Ok(())
 }
 
-fn run_report(args: ReportArgs) {
+fn run_report(args: ReportArgs) -> Result<()> {
     let user_specified_time = args.starttime.is_some() || args.endtime.is_some();
 
     let options = ReportOptions {
@@ -303,7 +334,7 @@ fn run_report(args: ReportArgs) {
     };
 
     // Fetch and parse jobs
-    let all_jobs = fetch_and_parse_jobs(&options);
+    let all_jobs = fetch_and_parse_jobs(&options)?;
 
     // Filter for GPU jobs if requested
     let all_jobs = if options.gpu {
@@ -311,6 +342,10 @@ fn run_report(args: ReportArgs) {
     } else {
         all_jobs
     };
+
+    if all_jobs.is_empty() {
+        return Ok(());
+    }
 
     if options.debug {
         eprintln!("Found {} jobs", all_jobs.len());
@@ -322,6 +357,10 @@ fn run_report(args: ReportArgs) {
     // Apply filters
     let metrics = filter_metrics(metrics, &options);
 
+    if metrics.is_empty() {
+        return Ok(());
+    }
+
     // Sort metrics
     let mut metrics = metrics;
     sort_metrics(&mut metrics, &options.sort_by, options.reverse);
@@ -331,10 +370,12 @@ fn run_report(args: ReportArgs) {
         if options.telegraf {
             eprintln!("Warning: --telegraf is not supported with summary reports, ignoring --telegraf");
         }
-        generate_and_output_summary(&metrics, &options);
+        generate_and_output_summary(&metrics, &options)?;
     } else {
-        generate_and_output_report(&metrics, &options);
+        generate_and_output_report(&metrics, &options)?;
     }
+
+    Ok(())
 }
 
 fn run_usage(args: UsageArgs) {
@@ -409,7 +450,7 @@ fn run_stat(args: StatArgs) {
     );
 
     if metrics.is_empty() {
-        eprintln!("No running jobs found matching the criteria.");
+        eprintln!("No jobs found matching the criteria.");
         return;
     }
 
@@ -424,4 +465,35 @@ fn run_stat(args: StatArgs) {
 fn run_show_tres() {
     let registry = TresRegistry::get_instance();
     registry.debug_print_tres_map();
+}
+
+fn run_tui(args: TuiArgs) -> Result<()> {
+    let partitions: Option<Vec<String>> = args.partition.as_ref().map(|p| {
+        p.split(',').map(|s| s.trim().to_string()).collect()
+    });
+
+    // Auto-filter to current user unless root or specific user requested
+    let current_user = users::get_current_username()
+        .map(|u| u.to_string_lossy().to_string())
+        .unwrap_or_default();
+
+    let effective_user = if let Some(ref u) = args.user {
+        Some(u.clone())
+    } else if current_user != "root" {
+        Some(current_user)
+    } else {
+        None
+    };
+
+    let config = TuiConfig {
+        partition: args.partition,
+        partitions,
+        user: args.user,
+        effective_user,
+        starttime: args.starttime,
+        refresh_interval: args.refresh,
+    };
+
+    tui::run_tui(config)?;
+    Ok(())
 }

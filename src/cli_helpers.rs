@@ -1,5 +1,6 @@
 use std::collections::HashMap;
-use std::process;
+
+use anyhow::{bail, Context, Result};
 
 use crate::calculator::EfficiencyCalculator;
 use crate::constants::{GPU_IDLE_THRESHOLD_PERCENT, GPU_MEMORY_IDLE_THRESHOLD_PERCENT};
@@ -41,7 +42,7 @@ pub struct ReportOptions {
 }
 
 /// Fetch job data from sacct and parse it.
-pub fn fetch_and_parse_jobs(options: &ReportOptions) -> Vec<SlurmJob> {
+pub fn fetch_and_parse_jobs(options: &ReportOptions) -> Result<Vec<SlurmJob>> {
     // Show default message if no options specified
     if options.starttime.is_none()
         && options.partition_filter.is_none()
@@ -53,7 +54,7 @@ pub fn fetch_and_parse_jobs(options: &ReportOptions) -> Vec<SlurmJob> {
         eprintln!("Using default: all users from last 24 hours");
     }
 
-    let sacct_output = match run_sacct(
+    let sacct_output = run_sacct(
         options.starttime.as_deref(),
         options.endtime.as_deref(),
         options.partition_filter.as_deref(),
@@ -63,32 +64,21 @@ pub fn fetch_and_parse_jobs(options: &ReportOptions) -> Vec<SlurmJob> {
         options.jobs.as_deref(),
         options.user_specified_time,
         options.debug,
-    ) {
-        Ok(output) => output,
-        Err(e) => {
-            eprintln!("Error: {}", e);
-            process::exit(1);
-        }
-    };
+    )
+    .context("Failed to run sacct")?;
 
-    let all_jobs = match SlurmJobParser::parse_string(&sacct_output) {
-        Ok(jobs) => jobs,
-        Err(e) => {
-            eprintln!("Error parsing sacct output: {}", e);
-            process::exit(1);
-        }
-    };
+    let all_jobs = SlurmJobParser::parse_string(&sacct_output)
+        .map_err(|e| anyhow::anyhow!("Failed to parse sacct output: {}", e))?;
 
     if all_jobs.is_empty() {
-        eprintln!("No valid jobs found.");
-        process::exit(1);
+        bail!("No valid jobs found");
     }
 
     if options.debug {
         eprintln!("Debug: Parsed {} jobs from sacct output", all_jobs.len());
     }
 
-    all_jobs
+    Ok(all_jobs)
 }
 
 /// Calculate efficiency metrics for all jobs.
@@ -153,7 +143,6 @@ pub fn filter_gpu_jobs(jobs: Vec<SlurmJob>, debug: bool) -> Vec<SlurmJob> {
 
     if gpu_jobs.is_empty() {
         eprintln!("No jobs requesting GPU resources found.");
-        process::exit(0);
     }
 
     gpu_jobs
@@ -220,7 +209,6 @@ pub fn filter_metrics(metrics: Vec<GPUMetrics>, options: &ReportOptions) -> Vec<
 
     if metrics.is_empty() {
         eprintln!("No jobs match the specified filters.");
-        process::exit(0);
     }
 
     // Limit number of jobs
@@ -232,7 +220,7 @@ pub fn filter_metrics(metrics: Vec<GPUMetrics>, options: &ReportOptions) -> Vec<
 }
 
 /// Generate and output summary report.
-pub fn generate_and_output_summary(metrics: &[GPUMetrics], options: &ReportOptions) {
+pub fn generate_and_output_summary(metrics: &[GPUMetrics], options: &ReportOptions) -> Result<()> {
     let account_only = options.summary_by_account && !options.allusers;
 
     let mut summaries = EfficiencyCalculator::calculate_summary_metrics(
@@ -251,10 +239,8 @@ pub fn generate_and_output_summary(metrics: &[GPUMetrics], options: &ReportOptio
             options.summary_by_account && options.allusers,
             account_only,
         );
-        if let Err(e) = std::fs::write(output_path, &report) {
-            eprintln!("Error writing report to {}: {}", output_path, e);
-            process::exit(1);
-        }
+        std::fs::write(output_path, &report)
+            .with_context(|| format!("Failed to write summary report to {}", output_path))?;
         eprintln!("Summary report written to {}", output_path);
     } else {
         GPUReporter::print_summary_report(
@@ -265,10 +251,12 @@ pub fn generate_and_output_summary(metrics: &[GPUMetrics], options: &ReportOptio
             account_only,
         );
     }
+
+    Ok(())
 }
 
 /// Generate and output detailed report.
-pub fn generate_and_output_report(metrics: &[GPUMetrics], options: &ReportOptions) {
+pub fn generate_and_output_report(metrics: &[GPUMetrics], options: &ReportOptions) -> Result<()> {
     let show_weighted_avg = options.user.is_some();
 
     // Telegraf output path
@@ -310,7 +298,7 @@ pub fn generate_and_output_report(metrics: &[GPUMetrics], options: &ReportOption
                 println!("{}", line);
             }
         }
-        return;
+        return Ok(());
     }
 
     if let Some(ref output_path) = options.output {
@@ -320,10 +308,8 @@ pub fn generate_and_output_report(metrics: &[GPUMetrics], options: &ReportOption
             options.detailed,
             show_weighted_avg,
         );
-        if let Err(e) = std::fs::write(output_path, &report) {
-            eprintln!("Error writing report to {}: {}", output_path, e);
-            process::exit(1);
-        }
+        std::fs::write(output_path, &report)
+            .with_context(|| format!("Failed to write report to {}", output_path))?;
         eprintln!("Report written to {}", output_path);
     } else {
         GPUReporter::print_report(
@@ -334,4 +320,6 @@ pub fn generate_and_output_report(metrics: &[GPUMetrics], options: &ReportOption
             show_weighted_avg,
         );
     }
+
+    Ok(())
 }
