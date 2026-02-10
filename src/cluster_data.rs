@@ -1,5 +1,6 @@
 use std::process::Command;
 
+use crate::command_ext::{run_with_timeout, SLURM_COMMAND_TIMEOUT};
 use crate::models::NodeInfo;
 
 pub struct ClusterDataCollector;
@@ -16,9 +17,9 @@ impl ClusterDataCollector {
             eprintln!("Running command: {}", cmd.join(" "));
         }
 
-        let output = match Command::new("scontrol")
-            .args(["show", "node", "--json"])
-            .output()
+        let mut cmd = Command::new("scontrol");
+        cmd.args(["show", "node", "--json"]);
+        let output = match run_with_timeout(cmd, SLURM_COMMAND_TIMEOUT)
         {
             Ok(output) if output.status.success() => output,
             Ok(output) => {

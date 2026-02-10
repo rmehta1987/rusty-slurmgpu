@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 use std::process::Command;
 
+use crate::command_ext::{run_with_timeout, SLURM_COMMAND_TIMEOUT};
 use crate::parser::SlurmJobParser;
 use crate::slurm_utils::build_node_gpu_mapping;
 use crate::tres_parser::TresParser;
@@ -27,19 +28,18 @@ impl UserUsageAnalyzer {
         let mut gpu_usage: HashMap<String, i32> = HashMap::new();
         let mut gpu_nodes: HashMap<String, std::collections::HashSet<String>> = HashMap::new();
 
-        let cmd_result = Command::new("/usr/bin/squeue")
-            .args([
-                "-O",
-                "jobid,username,state,nodelist:50,tres-alloc:200",
-                "-h",
-                "-u",
-                user,
-                "-t",
-                "RUNNING",
-            ])
-            .output();
+        let mut cmd = Command::new("/usr/bin/squeue");
+        cmd.args([
+            "-O",
+            "jobid,username,state,nodelist:50,tres-alloc:200",
+            "-h",
+            "-u",
+            user,
+            "-t",
+            "RUNNING",
+        ]);
 
-        match cmd_result {
+        match run_with_timeout(cmd, SLURM_COMMAND_TIMEOUT) {
             Ok(output) if output.status.success() => {
                 let stdout = String::from_utf8_lossy(&output.stdout);
 
@@ -136,11 +136,10 @@ impl UserUsageAnalyzer {
     pub fn get_user_cpu_usage(user: &str, debug: bool) -> i32 {
         let mut cpu_usage = 0;
 
-        let cmd_result = Command::new("/usr/bin/squeue")
-            .args(["-O", "jobid,numcpus", "-h", "-u", user, "-t", "RUNNING"])
-            .output();
+        let mut cmd = Command::new("/usr/bin/squeue");
+        cmd.args(["-O", "jobid,numcpus", "-h", "-u", user, "-t", "RUNNING"]);
 
-        match cmd_result {
+        match run_with_timeout(cmd, SLURM_COMMAND_TIMEOUT) {
             Ok(output) if output.status.success() => {
                 let stdout = String::from_utf8_lossy(&output.stdout);
                 for line in stdout.trim().lines() {
@@ -203,7 +202,7 @@ impl UserUsageAnalyzer {
             eprintln!("Debug: Running squeue for all users resource usage");
         }
 
-        match cmd.output() {
+        match run_with_timeout(cmd, SLURM_COMMAND_TIMEOUT) {
             Ok(output) if output.status.success() => {
                 let stdout = String::from_utf8_lossy(&output.stdout);
 

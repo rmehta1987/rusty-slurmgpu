@@ -3,21 +3,22 @@ use std::process::Command;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::calculator::gpu_memory_mb;
+use crate::command_ext::{run_with_timeout, SLURM_COMMAND_TIMEOUT};
 use crate::models::*;
 use crate::tres_parser::TresParser;
 
 pub struct SstatMonitor;
 
 impl SstatMonitor {
-    /// Get list of running job IDs using squeue.
-    pub fn get_running_jobs(
+    /// Get list of job IDs using squeue (running and pending).
+    pub fn get_jobs(
         user: Option<&str>,
         partition: Option<&str>,
         max_jobs: usize,
         debug: bool,
     ) -> Vec<String> {
         let mut cmd = Command::new("squeue");
-        cmd.args(["--json", "--state=RUNNING"]);
+        cmd.args(["--json", "--state=RUNNING,PENDING"]);
 
         if let Some(u) = user {
             cmd.args(["-u", u]);
@@ -27,10 +28,10 @@ impl SstatMonitor {
         }
 
         if debug {
-            eprintln!("Debug: Running squeue --json for running jobs");
+            eprintln!("Debug: Running squeue --json for running/pending jobs");
         }
 
-        match cmd.output() {
+        match run_with_timeout(cmd, SLURM_COMMAND_TIMEOUT) {
             Ok(output) if output.status.success() => {
                 let stdout = String::from_utf8_lossy(&output.stdout);
                 let data: serde_json::Value = match serde_json::from_str(&stdout) {
@@ -44,21 +45,19 @@ impl SstatMonitor {
                 let mut job_ids = Vec::new();
                 if let Some(jobs) = data.get("jobs").and_then(|v| v.as_array()) {
                     for job in jobs {
-                        if let Some(states) = job.get("job_state").and_then(|v| v.as_array()) {
-                            if states.iter().any(|s| s.as_str() == Some("RUNNING")) {
-                                if let Some(job_id) = job.get("job_id").and_then(|v| v.as_i64()) {
-                                    job_ids.push(job_id.to_string());
-                                }
-                            }
+                        if let Some(job_id) = job.get("job_id").and_then(|v| v.as_i64()) {
+                            job_ids.push(job_id.to_string());
                         }
                     }
                 }
 
                 if debug {
-                    eprintln!("Debug: Found {} running jobs", job_ids.len());
+                    eprintln!("Debug: Found {} jobs", job_ids.len());
                 }
 
-                job_ids.truncate(max_jobs);
+                if max_jobs > 0 {
+                    job_ids.truncate(max_jobs);
+                }
                 job_ids
             }
             Ok(output) => {
@@ -75,9 +74,9 @@ impl SstatMonitor {
 
     /// Get job information from squeue for a specific job.
     pub fn get_job_info(job_id: &str, debug: bool) -> Option<serde_json::Value> {
-        let output = match Command::new("squeue")
-            .args(["--json", "-j", job_id])
-            .output()
+        let mut cmd = Command::new("squeue");
+        cmd.args(["--json", "-j", job_id]);
+        let output = match run_with_timeout(cmd, SLURM_COMMAND_TIMEOUT)
         {
             Ok(output) if output.status.success() => output,
             Ok(_) | Err(_) => {
@@ -162,17 +161,16 @@ impl SstatMonitor {
 
     /// Run sstat command for a specific job and parse output.
     pub fn run_sstat(job_id: &str, debug: bool) -> Option<HashMap<String, String>> {
-        let output = Command::new("sstat")
-            .args([
-                "-j",
-                job_id,
-                "-p",
-                "--allsteps",
-                "-o",
-                "JobID,AveCPU,MaxRSS,AveRSS,TRESUsageInMax,TRESUsageInAve,TRESUsageInTot",
-            ])
-            .output()
-            .ok()?;
+        let mut cmd = Command::new("sstat");
+        cmd.args([
+            "-j",
+            job_id,
+            "-p",
+            "--allsteps",
+            "-o",
+            "JobID,AveCPU,MaxRSS,AveRSS,TRESUsageInMax,TRESUsageInAve,TRESUsageInTot",
+        ]);
+        let output = run_with_timeout(cmd, SLURM_COMMAND_TIMEOUT).ok()?;
 
         let stdout = String::from_utf8_lossy(&output.stdout);
         if stdout.is_empty() {
@@ -296,6 +294,7 @@ impl SstatMonitor {
             0
         };
 
+
         // Initialize metrics
         let mut gpu_util = "---".to_string();
         let mut gpu_mem = "---".to_string();
@@ -385,10 +384,18 @@ impl SstatMonitor {
             "---".to_string()
         };
 
+        let state = job_info
+            .get("job_state")
+            .and_then(|v| v.as_array())
+            .and_then(|arr| arr.first())
+            .and_then(|s| s.as_str())
+            .unwrap_or("RUNNING")
+            .to_string();
+
         Some(GPUMetrics {
             job_id: JobId::Numeric(job_id_num),
             user,
-            state: "RUNNING".to_string(),
+            state,
             elapsed,
             partition,
             gpu_util,
@@ -450,12 +457,14 @@ impl SstatMonitor {
 
         // Get job IDs to monitor
         let jobs_to_monitor = if let Some(ids) = job_ids {
-            ids.iter()
-                .take(max_jobs)
-                .cloned()
-                .collect::<Vec<_>>()
+            let iter = ids.iter();
+            if max_jobs > 0 {
+                iter.take(max_jobs).cloned().collect::<Vec<_>>()
+            } else {
+                iter.cloned().collect::<Vec<_>>()
+            }
         } else {
-            Self::get_running_jobs(user, partition, max_jobs, debug)
+            Self::get_jobs(user, partition, max_jobs, debug)
         };
 
         if jobs_to_monitor.is_empty() {
@@ -463,7 +472,7 @@ impl SstatMonitor {
         }
 
         eprintln!(
-            "Monitoring {} running jobs...",
+            "Monitoring {} jobs...",
             jobs_to_monitor.len()
         );
 
@@ -488,8 +497,19 @@ impl SstatMonitor {
                 jobs_to_monitor.len()
             );
 
-            // Get statistics from sstat
-            let sstat_data = Self::run_sstat(job_id, debug);
+            // Only run sstat for running jobs (pending jobs have no stats)
+            let is_running = job_info
+                .get("job_state")
+                .and_then(|v| v.as_array())
+                .and_then(|arr| arr.first())
+                .and_then(|s| s.as_str())
+                == Some("RUNNING");
+
+            let sstat_data = if is_running {
+                Self::run_sstat(job_id, debug)
+            } else {
+                None
+            };
 
             // Create metrics
             let metric = Self::create_metrics_from_job_and_sstat(

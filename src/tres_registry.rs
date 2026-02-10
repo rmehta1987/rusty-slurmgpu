@@ -2,6 +2,8 @@ use std::collections::HashMap;
 use std::process::Command;
 use std::sync::Mutex;
 
+use crate::command_ext::{run_with_timeout, SLURM_COMMAND_TIMEOUT};
+
 use once_cell::sync::Lazy;
 
 static REGISTRY: Lazy<Mutex<TresRegistry>> = Lazy::new(|| Mutex::new(TresRegistry::new()));
@@ -36,9 +38,9 @@ impl TresRegistry {
             return;
         }
 
-        match Command::new("sacctmgr")
-            .args(["show", "tres", "--json"])
-            .output()
+        let mut cmd = Command::new("sacctmgr");
+        cmd.args(["show", "tres", "--json"]);
+        match run_with_timeout(cmd, SLURM_COMMAND_TIMEOUT)
         {
             Ok(output) if output.status.success() => {
                 let stdout = String::from_utf8_lossy(&output.stdout);

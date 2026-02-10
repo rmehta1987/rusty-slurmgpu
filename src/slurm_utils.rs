@@ -2,6 +2,7 @@ use std::collections::HashMap;
 use std::process::Command;
 use std::sync::OnceLock;
 
+use crate::command_ext::{run_with_timeout, SLURM_COMMAND_TIMEOUT};
 use crate::constants::{SECONDS_PER_HOUR, SECONDS_PER_MINUTE};
 use crate::errors::GpuReportError;
 use crate::models::{GPUMetrics, SummaryMetrics};
@@ -21,9 +22,9 @@ pub fn get_partition_time_limits(debug: bool) -> HashMap<String, PartitionTimeLi
         .get_or_init(|| {
             let mut partition_limits = HashMap::new();
 
-            match Command::new("scontrol")
-                .args(["show", "partition", "--json"])
-                .output()
+            let mut cmd = Command::new("scontrol");
+            cmd.args(["show", "partition", "--json"]);
+            match run_with_timeout(cmd, SLURM_COMMAND_TIMEOUT)
             {
                 Ok(output) if output.status.success() => {
                     let stdout = String::from_utf8_lossy(&output.stdout);
@@ -88,9 +89,9 @@ pub fn get_partition_time_limits(debug: bool) -> HashMap<String, PartitionTimeLi
 pub fn build_node_gpu_mapping(debug: bool) -> HashMap<String, String> {
     let mut node_gpu_map = HashMap::new();
 
-    match Command::new("scontrol")
-        .args(["show", "node", "--json"])
-        .output()
+    let mut cmd = Command::new("scontrol");
+    cmd.args(["show", "node", "--json"]);
+    match run_with_timeout(cmd, SLURM_COMMAND_TIMEOUT)
     {
         Ok(output) if output.status.success() => {
             let stdout = String::from_utf8_lossy(&output.stdout);
@@ -238,9 +239,9 @@ pub fn run_sacct(
         eprintln!("Running command: {}", cmd_args.join(" "));
     }
 
-    let output = Command::new(&cmd_args[0])
-        .args(&cmd_args[1..])
-        .output()
+    let mut cmd = Command::new(&cmd_args[0]);
+    cmd.args(&cmd_args[1..]);
+    let output = run_with_timeout(cmd, SLURM_COMMAND_TIMEOUT)
         .map_err(|e| {
             GpuReportError::slurm_command("sacct", -1, &e.to_string(), "")
         })?;

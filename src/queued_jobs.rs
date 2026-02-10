@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 use std::process::Command;
 
+use crate::command_ext::{run_with_timeout, SLURM_COMMAND_TIMEOUT};
 use crate::models::QueuedJobInfo;
 use crate::parser::SlurmJobParser;
 
@@ -74,7 +75,7 @@ impl QueuedJobsCollector {
             eprintln!("Debug: Running squeue --json for pending jobs");
         }
 
-        match cmd.output() {
+        match run_with_timeout(cmd, SLURM_COMMAND_TIMEOUT) {
             Ok(output) if output.status.success() => {
                 let stdout = String::from_utf8_lossy(&output.stdout);
                 let data: serde_json::Value = match serde_json::from_str(&stdout) {
