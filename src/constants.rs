@@ -1,6 +1,9 @@
 use once_cell::sync::Lazy;
 use std::collections::HashSet;
 
+// Missing Value Placeholder
+pub const NO_DATA: &str = "---";
+
 // GPU Efficiency Thresholds
 pub const GPU_IDLE_THRESHOLD_PERCENT: f64 = 50.0;
 pub const GPU_MEMORY_IDLE_THRESHOLD_PERCENT: f64 = 50.0;

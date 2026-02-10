@@ -2,7 +2,9 @@ use comfy_table::{
     presets::UTF8_FULL_CONDENSED, Attribute, Cell, CellAlignment, Color, ContentArrangement, Table,
 };
 
-use crate::constants::*;
+use crate::constants::{
+    EXCELLENT_EFFICIENCY_THRESHOLD, GOOD_EFFICIENCY_THRESHOLD, NO_DATA, POOR_EFFICIENCY_THRESHOLD,
+};
 
 /// Create a new table with the standard preset and arrangement.
 pub fn new_table() -> Table {
@@ -27,7 +29,7 @@ pub fn hdr_right(name: &str) -> Cell {
 
 /// Get color for efficiency percentage.
 pub fn efficiency_color(value: &str) -> Color {
-    if value == "---" || value.is_empty() {
+    if value == NO_DATA || value.is_empty() {
         return Color::White;
     }
 
@@ -41,7 +43,7 @@ pub fn efficiency_color(value: &str) -> Color {
 
 /// Check if efficiency value is critically low (< 30%) for bold formatting.
 pub fn is_critical_efficiency(value: &str) -> bool {
-    if value == "---" || value.is_empty() {
+    if value == NO_DATA || value.is_empty() {
         return false;
     }
     value
