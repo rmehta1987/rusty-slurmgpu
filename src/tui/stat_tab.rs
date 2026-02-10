@@ -39,7 +39,7 @@ pub fn render_stat_tab(
     let filtered: Vec<&GPUMetrics> = metrics
         .iter()
         .filter(|m| {
-            if state_filter != "all" && !m.state.eq_ignore_ascii_case(state_filter) {
+            if state_filter != "all" && !m.state.matches_filter(state_filter) {
                 return false;
             }
             if !search_lower.is_empty() {
@@ -83,8 +83,8 @@ pub fn render_stat_tab(
                 Cell::from(m.user.as_str()),
                 Cell::from(m.job_id.to_string()),
                 Cell::from(Span::styled(
-                    m.state.as_str(),
-                    Style::default().fg(state_color(&m.state)),
+                    m.state.as_str().to_string(),
+                    Style::default().fg(state_color(m.state.as_str())),
                 )),
                 Cell::from(m.elapsed.as_str()),
                 Cell::from(efficiency_cell(&m.cpu_eff)),

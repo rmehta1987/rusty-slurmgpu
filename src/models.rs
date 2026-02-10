@@ -2,6 +2,83 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fmt;
 
+/// Typed representation of a Slurm job state.
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+pub enum JobState {
+    Pending,
+    Running,
+    Completed,
+    Failed,
+    Cancelled,
+    Timeout,
+    NodeFail,
+    Preempted,
+    /// Pseudo-states like "WEIGHTED AVG" or unrecognized values.
+    Other(String),
+}
+
+impl JobState {
+    pub fn as_str(&self) -> &str {
+        match self {
+            Self::Pending => "PENDING",
+            Self::Running => "RUNNING",
+            Self::Completed => "COMPLETED",
+            Self::Failed => "FAILED",
+            Self::Cancelled => "CANCELLED",
+            Self::Timeout => "TIMEOUT",
+            Self::NodeFail => "NODE_FAIL",
+            Self::Preempted => "PREEMPTED",
+            Self::Other(s) => s.as_str(),
+        }
+    }
+
+    /// Case-insensitive match against a filter string (e.g. "completed").
+    pub fn matches_filter(&self, filter: &str) -> bool {
+        self.as_str().eq_ignore_ascii_case(filter)
+    }
+
+    /// Case-insensitive substring search for TUI filtering.
+    pub fn contains_search(&self, search: &str) -> bool {
+        self.as_str().to_ascii_lowercase().contains(search)
+    }
+
+    pub fn is_pending(&self) -> bool {
+        *self == Self::Pending
+    }
+
+    pub fn is_running(&self) -> bool {
+        *self == Self::Running
+    }
+}
+
+impl fmt::Display for JobState {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.as_str())
+    }
+}
+
+impl From<&str> for JobState {
+    fn from(s: &str) -> Self {
+        match s.to_uppercase().as_str() {
+            "PENDING" => Self::Pending,
+            "RUNNING" => Self::Running,
+            "COMPLETED" => Self::Completed,
+            "FAILED" => Self::Failed,
+            "CANCELLED" => Self::Cancelled,
+            "TIMEOUT" => Self::Timeout,
+            "NODE_FAIL" => Self::NodeFail,
+            "PREEMPTED" => Self::Preempted,
+            _ => Self::Other(s.to_string()),
+        }
+    }
+}
+
+impl From<String> for JobState {
+    fn from(s: String) -> Self {
+        JobState::from(s.as_str())
+    }
+}
+
 /// Job ID that can be numeric or an array task string like "1234_56"
 #[derive(Debug, Clone, Serialize)]
 pub enum JobId {
@@ -179,7 +256,7 @@ pub struct SlurmJob {
 pub struct GPUMetrics {
     pub user: String,
     pub job_id: JobId,
-    pub state: String,
+    pub state: JobState,
     pub elapsed: String,
     pub time_eff: String,
     pub cpu_eff: String,

@@ -212,13 +212,13 @@ impl App {
         self.report_metrics
             .iter()
             .filter(|m| {
-                if state_filter != "all" && !m.state.eq_ignore_ascii_case(state_filter) {
+                if state_filter != "all" && !m.state.matches_filter(state_filter) {
                     return false;
                 }
                 if !s.is_empty() {
                     return m.user.to_lowercase().contains(&s)
                         || m.job_id.to_string().contains(&s)
-                        || m.state.to_lowercase().contains(&s)
+                        || m.state.contains_search(&s)
                         || m.partition.to_lowercase().contains(&s);
                 }
                 true
@@ -232,7 +232,7 @@ impl App {
         self.stat_metrics
             .iter()
             .filter(|m| {
-                if state_filter != "all" && !m.state.eq_ignore_ascii_case(state_filter) {
+                if state_filter != "all" && !m.state.matches_filter(state_filter) {
                     return false;
                 }
                 if !s.is_empty() {

@@ -14,7 +14,8 @@ pub fn gpu_memory_mb(gpu_type: &str) -> i64 {
         "a6000" | "6000" | "6000_ada" => 49152,
         "rtx_6000_pro" | "rtx_pro_6000" | "6000_pro" => 98304,
         "v100" => 32768,
-        "p100" | "k80" => 12288,
+        "p100" => 16384,
+        "k80" => 12288,
         "rtx8000" => 49152,
         "rtx_2080" | "2080rtx" | "2080" => 11264,
         "rtx_5000" | "5000_ada" => 32768,
@@ -396,7 +397,7 @@ impl EfficiencyCalculator {
         GPUMetrics {
             user: job.association.user.clone(),
             job_id: job.job_id.clone(),
-            state: state.clone(),
+            state: JobState::from(state.as_str()),
             elapsed: if is_pending {
                 "---".to_string()
             } else {
@@ -512,11 +513,11 @@ impl EfficiencyCalculator {
             let mut pending_jobs = 0usize;
 
             for m in group_metrics {
-                match m.state.as_str() {
-                    "COMPLETED" => completed_jobs += 1,
-                    "FAILED" => failed_jobs += 1,
-                    "RUNNING" => running_jobs += 1,
-                    "PENDING" => pending_jobs += 1,
+                match &m.state {
+                    JobState::Completed => completed_jobs += 1,
+                    JobState::Failed => failed_jobs += 1,
+                    JobState::Running => running_jobs += 1,
+                    JobState::Pending => pending_jobs += 1,
                     _ => {}
                 }
             }
@@ -524,7 +525,7 @@ impl EfficiencyCalculator {
             // Calculate total GPU hours
             let mut total_gpu_hours = 0.0f64;
             for m in group_metrics {
-                if m.state == "PENDING" {
+                if m.state.is_pending() {
                     continue;
                 }
                 let elapsed_seconds = Self::parse_elapsed_time(&m.elapsed);
@@ -536,7 +537,7 @@ impl EfficiencyCalculator {
             // Calculate efficiency averages (exclude pending/running)
             let completed_metrics: Vec<&&GPUMetrics> = group_metrics
                 .iter()
-                .filter(|m| m.state != "PENDING" && m.state != "RUNNING")
+                .filter(|m| !m.state.is_pending() && !m.state.is_running())
                 .collect();
 
             let avg_gpu_eff = Self::average_percentage(
@@ -629,7 +630,7 @@ impl EfficiencyCalculator {
             return GPUMetrics {
                 user: String::new(),
                 job_id: JobId::Numeric(0),
-                state: "WEIGHTED AVG".to_string(),
+                state: JobState::Other("WEIGHTED AVG".to_string()),
                 elapsed: "00:00:00".to_string(),
                 time_eff: String::new(),
                 cpu_eff: "---".to_string(),
@@ -657,8 +658,7 @@ impl EfficiencyCalculator {
         }
 
         for metric in metrics {
-            let state_upper = metric.state.to_uppercase();
-            if state_upper.contains("RUNNING") || state_upper.contains("PENDING") {
+            if metric.state.is_running() || metric.state.is_pending() {
                 continue;
             }
 
@@ -701,7 +701,7 @@ impl EfficiencyCalculator {
         GPUMetrics {
             user: String::new(),
             job_id: JobId::Numeric(0),
-            state: "WEIGHTED AVG".to_string(),
+            state: JobState::Other("WEIGHTED AVG".to_string()),
             elapsed: Self::format_time(total_seconds as i64),
             time_eff: String::new(),
             cpu_eff: format_avg("cpu_eff"),

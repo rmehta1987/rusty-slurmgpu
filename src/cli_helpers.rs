@@ -205,7 +205,7 @@ pub fn filter_metrics(metrics: Vec<GPUMetrics>, options: &ReportOptions) -> Vec<
             "running" => "RUNNING",
             _ => "COMPLETED",
         };
-        metrics.retain(|m| m.state == target_state);
+        metrics.retain(|m| m.state.matches_filter(target_state));
     }
 
     // Filter by minimum GPU efficiency

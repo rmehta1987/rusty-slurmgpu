@@ -175,7 +175,7 @@ impl GPUReporter {
             let mut row: Vec<Cell> = vec![
                 Cell::new(&metric.user).fg(Color::Magenta),
                 Cell::new(metric.job_id.to_string()).fg(Color::Cyan),
-                Cell::new(&metric.state).fg(state_color(&metric.state)),
+                Cell::new(metric.state.as_str()).fg(state_color(metric.state.as_str())),
                 Cell::new(&metric.elapsed).set_alignment(CellAlignment::Right),
                 efficiency_cell(&metric.time_eff),
                 efficiency_cell(&metric.cpu_eff),

@@ -402,13 +402,14 @@ impl SstatMonitor {
             "---".to_string()
         };
 
-        let state = job_info
-            .get("job_state")
-            .and_then(|v| v.as_array())
-            .and_then(|arr| arr.first())
-            .and_then(|s| s.as_str())
-            .unwrap_or("RUNNING")
-            .to_string();
+        let state = JobState::from(
+            job_info
+                .get("job_state")
+                .and_then(|v| v.as_array())
+                .and_then(|arr| arr.first())
+                .and_then(|s| s.as_str())
+                .unwrap_or("RUNNING"),
+        );
 
         Some(GPUMetrics {
             job_id: JobId::Numeric(job_id_num),
