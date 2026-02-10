@@ -281,22 +281,17 @@ fn main() -> Result<()> {
         Some(Commands::ShowTres) => run_show_tres(),
         Some(Commands::Tui(args)) => run_tui(args)?,
         None => {
-            println!("slurm-gpu: GPU utilization reporting for Slurm");
-            println!("Use --help for usage information");
-            println!();
-            println!("Available commands:");
-            println!("  report      Generate GPU utilization reports");
-            println!("  usage       Show current GPU usage by type");
-            println!("  stat        Monitor running jobs with real-time stats");
-            println!("  show-tres   Show dynamic TRES ID mappings");
-            println!("  tui         Launch interactive TUI dashboard");
-            println!();
-            println!("Symlink shortcuts:");
-            println!("  slurm-report     -> slurm-gpu report");
-            println!("  slurm-usage      -> slurm-gpu usage");
-            println!("  slurm-stat       -> slurm-gpu stat");
-            println!("  slurm-show-tres  -> slurm-gpu show-tres");
-            println!("  slurm-tui        -> slurm-gpu tui");
+            // Default to usage report when no subcommand given
+            run_usage(UsageArgs {
+                plain: false,
+                detailed: false,
+                partition: None,
+                k: false,
+                user: None,
+                all_users: false,
+                telegraf: false,
+                debug: false,
+            });
         }
     }
 
