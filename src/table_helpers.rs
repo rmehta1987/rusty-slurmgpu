@@ -74,13 +74,14 @@ pub fn state_color(state: &str) -> Color {
     }
 }
 
-/// Get color for utilization (inverted - high utilization = less availability).
+/// Get color for resource utilization percentage.
+/// High utilization = Green (healthy), Low = Red (underused or needs attention).
 pub fn utilization_color(util_percent: f64) -> Color {
     if util_percent >= EXCELLENT_EFFICIENCY_THRESHOLD {
-        Color::Red
+        Color::Green
     } else if util_percent >= GOOD_EFFICIENCY_THRESHOLD {
         Color::Yellow
     } else {
-        Color::Green
+        Color::Red
     }
 }
