@@ -1,5 +1,6 @@
 use anyhow::Result;
-use clap::{Parser, Subcommand};
+use clap::{CommandFactory, Parser, Subcommand};
+use clap_complete::Shell;
 use std::env;
 
 use slurm_gpu_reporter::cli_helpers::*;
@@ -41,6 +42,9 @@ enum Commands {
 
     /// Launch interactive TUI dashboard
     Tui(TuiArgs),
+
+    /// Generate shell completion scripts
+    Completions(CompletionsArgs),
 }
 
 #[derive(Parser, Debug)]
@@ -60,6 +64,13 @@ pub struct TuiArgs {
     /// Auto-refresh interval in seconds (default: 30)
     #[arg(long, default_value_t = 30)]
     refresh: u64,
+}
+
+#[derive(Parser, Debug)]
+pub struct CompletionsArgs {
+    /// Shell to generate completions for
+    #[arg(value_enum)]
+    shell: Shell,
 }
 
 #[derive(Parser, Debug)]
@@ -173,7 +184,7 @@ pub struct UsageArgs {
     #[arg(short = 'r', long = "partition")]
     partition: Option<String>,
 
-    /// Shortcut for partitions: h200ea,education,gpu-common,scavenger-gpu
+    /// Shortcut for common partitions (set SLURM_GPU_K_PARTITIONS to override)
     #[arg(short = 'k')]
     k: bool,
 
@@ -280,6 +291,7 @@ fn main() -> Result<()> {
         Some(Commands::Stat(args)) => run_stat(args),
         Some(Commands::ShowTres) => run_show_tres(),
         Some(Commands::Tui(args)) => run_tui(args)?,
+        Some(Commands::Completions(args)) => run_completions(args),
         None => {
             // Default to usage report when no subcommand given
             run_usage(UsageArgs {
@@ -376,12 +388,15 @@ fn run_report(args: ReportArgs) -> Result<()> {
 fn run_usage(args: UsageArgs) {
     let mut partition = args.partition;
 
-    // Handle the -k shortcut
+    // Handle the -k shortcut (overridable via SLURM_GPU_K_PARTITIONS env var)
     if args.k {
         if partition.is_some() {
             eprintln!("Warning: -k flag overrides --partition option");
         }
-        partition = Some("h200ea,education,gpu-common,scavenger-gpu".to_string());
+        partition = Some(
+            env::var("SLURM_GPU_K_PARTITIONS")
+                .unwrap_or_else(|_| "h200ea,education,gpu-common,scavenger-gpu".to_string()),
+        );
     }
 
     let partitions: Option<Vec<String>> = partition.map(|p| {
@@ -500,4 +515,9 @@ fn run_tui(args: TuiArgs) -> Result<()> {
 
     tui::run_tui(config)?;
     Ok(())
+}
+
+fn run_completions(args: CompletionsArgs) {
+    let mut cmd = Cli::command();
+    clap_complete::generate(args.shell, &mut cmd, "slurm-gpu", &mut std::io::stdout());
 }
