@@ -9,9 +9,9 @@ use crate::tres_parser::TresParser;
 use crate::tres_registry::TresRegistry;
 
 static TRES_PATTERN: Lazy<Regex> =
-    Lazy::new(|| Regex::new(r"([^=,]+)=([^,]+)").unwrap());
+    Lazy::new(|| Regex::new(r"([^=,]+)=([^,]+)").expect("TRES_PATTERN regex is valid"));
 static MEMORY_UNIT_PATTERN: Lazy<Regex> =
-    Lazy::new(|| Regex::new(r"^(\d+(?:\.\d+)?)([KMGT]?)$").unwrap());
+    Lazy::new(|| Regex::new(r"^(\d+(?:\.\d+)?)([KMGT]?)$").expect("MEMORY_UNIT_PATTERN regex is valid"));
 
 pub struct SlurmJobParser;
 
@@ -134,7 +134,7 @@ impl SlurmJobParser {
                     // Inherit user from main job if missing
                     if step_data_owned
                         .get("User")
-                        .map_or(true, |u| u.trim().is_empty())
+                        .is_none_or(|u| u.trim().is_empty())
                     {
                         if let Some(user) = main_job.get("User") {
                             step_data_owned.insert("User".to_string(), user.clone());
@@ -479,7 +479,7 @@ impl SlurmJobParser {
                 .trim()
                 .chars()
                 .next()
-                .map_or(false, |c| c.is_ascii_digit())
+                .is_some_and(|c| c.is_ascii_digit())
         {
             &lines[1..]
         } else {
@@ -518,9 +518,9 @@ impl SlurmJobParser {
 
         // Look for gres/gpu=N pattern
         static GPU_COUNT_RE: Lazy<Regex> =
-            Lazy::new(|| Regex::new(r"gres/gpu=(\d+)").unwrap());
+            Lazy::new(|| Regex::new(r"gres/gpu=(\d+)").expect("GPU_COUNT_RE regex is valid"));
         static GPU_TYPE_RE: Lazy<Regex> =
-            Lazy::new(|| Regex::new(r"gres/gpu:([^=,]+)=(\d+)").unwrap());
+            Lazy::new(|| Regex::new(r"gres/gpu:([^=,]+)=(\d+)").expect("GPU_TYPE_RE regex is valid"));
 
         if let Some(cap) = GPU_COUNT_RE.captures(tres_str) {
             gpu_count = cap[1].parse::<i32>().unwrap_or(0);
@@ -577,26 +577,17 @@ mod tests {
 
     #[test]
     fn test_parse_job_id_numeric() {
-        match SlurmJobParser::parse_job_id("1234") {
-            JobId::Numeric(n) => assert_eq!(n, 1234),
-            _ => panic!("Expected Numeric"),
-        }
+        assert!(matches!(SlurmJobParser::parse_job_id("1234"), JobId::Numeric(1234)));
     }
 
     #[test]
     fn test_parse_job_id_array_task() {
-        match SlurmJobParser::parse_job_id("1234_56") {
-            JobId::ArrayTask(s) => assert_eq!(s, "1234_56"),
-            _ => panic!("Expected ArrayTask"),
-        }
+        assert!(matches!(SlurmJobParser::parse_job_id("1234_56"), JobId::ArrayTask(ref s) if s == "1234_56"));
     }
 
     #[test]
     fn test_parse_job_id_with_step() {
-        match SlurmJobParser::parse_job_id("1234.batch") {
-            JobId::Numeric(n) => assert_eq!(n, 1234),
-            _ => panic!("Expected Numeric"),
-        }
+        assert!(matches!(SlurmJobParser::parse_job_id("1234.batch"), JobId::Numeric(1234)));
     }
 
     #[test]

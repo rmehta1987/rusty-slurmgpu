@@ -36,8 +36,7 @@ pub(crate) fn run_with_timeout(mut cmd: Command, timeout: Duration) -> io::Resul
                 ),
             ))
         }
-        Err(_) => Err(io::Error::new(
-            io::ErrorKind::Other,
+        Err(_) => Err(io::Error::other(
             "Command thread panicked",
         )),
     }

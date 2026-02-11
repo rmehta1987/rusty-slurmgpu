@@ -5,26 +5,45 @@ use crate::models::*;
 use crate::slurm_utils::PartitionTimeLimits;
 use crate::tres_parser::TresParser;
 
-/// GPU memory sizes in MB for different GPU types.
+/// GPU VRAM sizes in MB, used to calculate GPUMemEff when Slurm doesn't report
+/// memory allocation directly. Values sourced from NVIDIA product specifications.
+///
+/// | GPU            | VRAM (GB) | VRAM (MB) |
+/// |----------------|-----------|-----------|
+/// | K80            | 12        | 12288     |
+/// | P100           | 16        | 16384     |
+/// | RTX 2080       | 11        | 11264     |
+/// | A5000          | 24        | 24576     |
+/// | V100           | 32        | 32768     |
+/// | RTX 5000 Ada   | 32        | 32768     |
+/// | A40            | 48        | 49152     |
+/// | A6000          | 48        | 49152     |
+/// | RTX 8000       | 48        | 49152     |
+/// | A100 SXM       | 80        | 81920     |
+/// | H100           | 80        | 81920     |
+/// | RTX 6000 Pro   | 96        | 98304     |
+/// | H200           | 140       | 143360    |
+/// | H200 MIG 1g    | 18        | 18432     |
+/// | H200 MIG 3g/4g | 71        | 72704     |
 pub(crate) fn gpu_memory_mb(gpu_type: &str) -> i64 {
     match gpu_type {
-        "a100" | "nvidia_a100-sxm4-80gb" => 81920,
-        "a40" => 49152,
-        "a5000" => 24576,
-        "a6000" | "6000" | "6000_ada" => 49152,
-        "rtx_6000_pro" | "rtx_pro_6000" | "6000_pro" => 98304,
-        "v100" => 32768,
-        "p100" => 16384,
-        "k80" => 12288,
-        "rtx8000" => 49152,
-        "rtx_2080" | "2080rtx" | "2080" => 11264,
-        "rtx_5000" | "5000_ada" => 32768,
-        "titan_v" => 12288,
-        "h100" => 81920,
-        "h200" => 143360,
-        "h200_1g.18gb" => 18432,
-        "h200_3g.71gb" | "h200_4g.71gb" => 72704,
-        _ => 24576, // default
+        "a100" | "nvidia_a100-sxm4-80gb" => 81920,    // 80 GB
+        "a40" => 49152,                                 // 48 GB
+        "a5000" => 24576,                               // 24 GB
+        "a6000" | "6000" | "6000_ada" => 49152,         // 48 GB
+        "rtx_6000_pro" | "rtx_pro_6000" | "6000_pro" => 98304, // 96 GB
+        "v100" => 32768,                                // 32 GB
+        "p100" => 16384,                                // 16 GB
+        "k80" => 12288,                                 // 12 GB
+        "rtx8000" => 49152,                             // 48 GB
+        "rtx_2080" | "2080rtx" | "2080" => 11264,      // 11 GB
+        "rtx_5000" | "5000_ada" => 32768,               // 32 GB
+        "titan_v" => 12288,                             // 12 GB
+        "h100" => 81920,                                // 80 GB
+        "h200" => 143360,                               // 140 GB
+        "h200_1g.18gb" => 18432,                        // 18 GB (MIG)
+        "h200_3g.71gb" | "h200_4g.71gb" => 72704,      // 71 GB (MIG)
+        _ => 24576,                                     // 24 GB default
     }
 }
 
@@ -292,7 +311,7 @@ impl EfficiencyCalculator {
             }
 
             let gpu_type = if resource.name.contains("gpu:") {
-                resource.name.splitn(2, ':').nth(1).map(|s| s.to_string())
+                resource.name.split_once(':').map(|x| x.1).map(|s| s.to_string())
             } else if resource.name != "gpu" {
                 Some(resource.name.clone())
             } else {
@@ -679,8 +698,12 @@ impl EfficiencyCalculator {
 
             for (key, value) in &values {
                 if let Some(numeric) = Self::parse_percentage(value) {
-                    *weighted_sums.get_mut(key).unwrap() += elapsed_seconds as f64 * numeric;
-                    *metric_counts.get_mut(key).unwrap() += 1;
+                    if let Some(sum) = weighted_sums.get_mut(key) {
+                        *sum += elapsed_seconds as f64 * numeric;
+                    }
+                    if let Some(count) = metric_counts.get_mut(key) {
+                        *count += 1;
+                    }
                 }
             }
         }

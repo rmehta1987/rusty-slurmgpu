@@ -2,9 +2,9 @@ use once_cell::sync::Lazy;
 use regex::Regex;
 
 static GPU_PATTERN: Lazy<Regex> =
-    Lazy::new(|| Regex::new(r"gpu:[^:,]+:\d+\([^)]*\)").unwrap());
+    Lazy::new(|| Regex::new(r"gpu:[^:,]+:\d+\([^)]*\)").expect("GPU_PATTERN regex is valid"));
 static GPU_DETAILS_PATTERN: Lazy<Regex> =
-    Lazy::new(|| Regex::new(r"gpu:([^:,]+):(\d+)\([^)]*\)").unwrap());
+    Lazy::new(|| Regex::new(r"gpu:([^:,]+):(\d+)\([^)]*\)").expect("GPU_DETAILS_PATTERN regex is valid"));
 
 pub(crate) struct GresParser;
 

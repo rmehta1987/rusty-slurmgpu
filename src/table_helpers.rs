@@ -49,7 +49,7 @@ pub(crate) fn is_critical_efficiency(value: &str) -> bool {
     value
         .trim_end_matches('%')
         .parse::<f64>()
-        .map_or(false, |v| v < POOR_EFFICIENCY_THRESHOLD)
+        .is_ok_and(|v| v < POOR_EFFICIENCY_THRESHOLD)
 }
 
 /// Create a cell with efficiency color, adding bold for critical values.

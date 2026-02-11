@@ -7,6 +7,7 @@ use ratatui::Frame;
 use crate::models::GPUMetrics;
 use crate::tui::widgets::{efficiency_cell, state_color};
 
+#[allow(clippy::too_many_arguments)]
 pub fn render_report_tab(
     f: &mut Frame,
     area: Rect,

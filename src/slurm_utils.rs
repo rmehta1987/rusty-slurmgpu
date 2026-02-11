@@ -152,6 +152,7 @@ pub fn build_node_gpu_mapping(debug: bool) -> HashMap<String, String> {
 }
 
 /// Run sacct command and return parseable format output.
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn run_sacct(
     start_time: Option<&str>,
     end_time: Option<&str>,
@@ -203,7 +204,7 @@ pub(crate) fn run_sacct(
             // When user specifies start time but not end time
             let end = if effective_start
                 .as_ref()
-                .map_or(false, |s| s.contains('T') || s.contains(':'))
+                .is_some_and(|s| s.contains('T') || s.contains(':'))
             {
                 chrono::Local::now()
                     .format("%Y-%m-%dT%H:%M:%S")
@@ -287,7 +288,7 @@ fn resolve_time_keyword(time_str: &str) -> String {
 }
 
 /// Sort metrics by specified field.
-pub fn sort_metrics(metrics: &mut Vec<GPUMetrics>, sort_by: &str, reverse: bool) {
+pub fn sort_metrics(metrics: &mut [GPUMetrics], sort_by: &str, reverse: bool) {
     metrics.sort_by(|a, b| {
         let cmp = match sort_by {
             "user" => a.user.cmp(&b.user),
@@ -335,7 +336,7 @@ pub fn sort_metrics(metrics: &mut Vec<GPUMetrics>, sort_by: &str, reverse: bool)
 }
 
 /// Sort summary metrics by specified field.
-pub(crate) fn sort_summary_metrics(summaries: &mut Vec<SummaryMetrics>, sort_by: &str, reverse: bool) {
+pub(crate) fn sort_summary_metrics(summaries: &mut [SummaryMetrics], sort_by: &str, reverse: bool) {
     summaries.sort_by(|a, b| {
         let cmp = match sort_by {
             "user" => a.user.cmp(&b.user),

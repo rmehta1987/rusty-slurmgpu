@@ -116,7 +116,7 @@ pub struct TresRegistryRef;
 
 impl TresRegistryRef {
     pub fn get_tres_id(&self, tres_type: &str, tres_name: &str) -> Option<i32> {
-        let mut registry = REGISTRY.lock().unwrap();
+        let mut registry = REGISTRY.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
         registry.ensure_loaded();
         registry
             .tres_map
@@ -135,7 +135,7 @@ impl TresRegistryRef {
     }
 
     pub fn debug_print_tres_map(&self) {
-        let mut registry = REGISTRY.lock().unwrap();
+        let mut registry = REGISTRY.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
         registry.ensure_loaded();
 
         println!("TRES Registry Contents:");

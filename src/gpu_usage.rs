@@ -550,7 +550,7 @@ impl GPUUsageReporter {
                 }
             }
 
-            if gpu_data.map_or(true, |m| m.is_empty())
+            if gpu_data.is_none_or(|m| m.is_empty())
                 && (user_cpu_count > 0 || user_memory_mb > 0 || *queued_count > 0)
             {
                 let cpu_display = if user_cpu_count > 0 {
@@ -699,7 +699,7 @@ impl GPUUsageReporter {
                 }
             }
 
-            if gpu_data.map_or(true, |m| m.is_empty())
+            if gpu_data.is_none_or(|m| m.is_empty())
                 && (user_cpu_count > 0 || user_memory_mb > 0 || *queued_count > 0)
             {
                 let cpu_display = if user_cpu_count > 0 {
@@ -891,13 +891,11 @@ impl GPUUsageReporter {
                 tags.push(format!("partition={}", partition_str));
             }
 
-            let fields = vec![
-                format!("total={}i", summary.total_gpus),
+            let fields = [format!("total={}i", summary.total_gpus),
                 format!("used={}i", summary.used_gpus),
                 format!("available={}i", summary.available_gpus),
                 format!("utilization={:.2}", summary.utilization_percent()),
-                format!("node_count={}i", summary.nodes_with_type.len()),
-            ];
+                format!("node_count={}i", summary.nodes_with_type.len())];
 
             lines.push(format!(
                 "slurm_gpu_usage,{} {} {}",
@@ -930,13 +928,11 @@ impl GPUUsageReporter {
             tags.push(format!("partition={}", partition_str));
         }
 
-        let fields = vec![
-            format!("total={}i", total_all),
+        let fields = [format!("total={}i", total_all),
             format!("used={}i", used_all),
             format!("available={}i", total_all - used_all),
             format!("utilization={:.2}", utilization_all),
-            format!("node_count={}i", total_nodes),
-        ];
+            format!("node_count={}i", total_nodes)];
 
         lines.push(format!(
             "slurm_gpu_usage,{} {} {}",

@@ -109,9 +109,12 @@ impl SstatMonitor {
             if let Some((key, value)) = part.split_once('=') {
                 let parsed = if (key == "mem" || key == "gres/gpumem")
                     && !value.is_empty()
-                    && value.as_bytes().last().map_or(false, |b| b.is_ascii_alphabetic())
+                    && value.as_bytes().last().is_some_and(|b| b.is_ascii_alphabetic())
                 {
-                    let unit = value.as_bytes().last().unwrap().to_ascii_uppercase() as char;
+                    let unit = match value.as_bytes().last() {
+                        Some(b) => b.to_ascii_uppercase() as char,
+                        None => continue,
+                    };
                     let number: f64 = value[..value.len() - 1].parse().unwrap_or(0.0);
                     let multiplier = match unit {
                         'K' => 1024.0,
@@ -439,8 +442,11 @@ impl SstatMonitor {
         if mem_str.is_empty() {
             return None;
         }
-        if mem_str.as_bytes().last().map_or(false, |b| b.is_ascii_alphabetic()) {
-            let unit = mem_str.as_bytes().last().unwrap().to_ascii_uppercase() as char;
+        if mem_str.as_bytes().last().is_some_and(|b| b.is_ascii_alphabetic()) {
+            let unit = match mem_str.as_bytes().last() {
+                Some(b) => b.to_ascii_uppercase() as char,
+                None => return None,
+            };
             let number: f64 = mem_str[..mem_str.len() - 1].parse().ok()?;
             let multiplier = match unit {
                 'K' => 1.0,

@@ -6,11 +6,11 @@ use crate::models::TresResource;
 use crate::tres_registry::TresRegistry;
 
 static GPU_PATTERN: Lazy<Regex> =
-    Lazy::new(|| Regex::new(r"gres/gpu(?::([^=,]+))?=(\d+)").unwrap());
+    Lazy::new(|| Regex::new(r"gres/gpu(?::([^=,]+))?=(\d+)").expect("GPU_PATTERN regex is valid"));
 static MEMORY_UNITS: Lazy<Regex> =
-    Lazy::new(|| Regex::new(r"^(\d+(?:\.\d+)?)([KMGT]?)$").unwrap());
+    Lazy::new(|| Regex::new(r"^(\d+(?:\.\d+)?)([KMGT]?)$").expect("MEMORY_UNITS regex is valid"));
 static GENERAL_TRES: Lazy<Regex> =
-    Lazy::new(|| Regex::new(r"([^=,]+)=([^,]+)").unwrap());
+    Lazy::new(|| Regex::new(r"([^=,]+)=([^,]+)").expect("GENERAL_TRES regex is valid"));
 
 static KNOWN_GPU_TYPES: Lazy<HashSet<&'static str>> = Lazy::new(|| {
     [
@@ -342,7 +342,7 @@ impl TresParser {
                 } else if resource.name.to_lowercase().contains("gpu") {
                     if resource.name.contains(':') {
                         return Some(
-                            resource.name.splitn(2, ':').nth(1).unwrap_or("gpu").to_string(),
+                            resource.name.split_once(':').map(|x| x.1).unwrap_or("gpu").to_string(),
                         );
                     }
                     return Some(resource.name.clone());

@@ -140,7 +140,7 @@ pub fn calculate_metrics_for_jobs(jobs: &[SlurmJob], debug: bool) -> Vec<GPUMetr
     let failed_jobs = 0;
 
     for (i, job) in jobs.iter().enumerate() {
-        let metric = EfficiencyCalculator::calculate_metrics(job, &partition_limits, debug);
+        let metric = EfficiencyCalculator::calculate_metrics(job, partition_limits, debug);
         metrics.push(metric);
 
         if debug && i < 3 {
@@ -173,7 +173,7 @@ pub fn filter_gpu_jobs(jobs: Vec<SlurmJob>, debug: bool) -> Vec<SlurmJob> {
     let original_count = jobs.len();
     let gpu_jobs: Vec<SlurmJob> = jobs
         .into_iter()
-        .filter(|job| EfficiencyCalculator::job_requests_gpu(job))
+        .filter(EfficiencyCalculator::job_requests_gpu)
         .collect();
 
     if debug {
@@ -217,7 +217,7 @@ pub fn filter_metrics(metrics: Vec<GPUMetrics>, options: &ReportOptions) -> Vec<
                 m.gpu_eff
                     .trim_end_matches('%')
                     .parse::<f64>()
-                    .map_or(false, |v| v >= min_eff)
+                    .is_ok_and(|v| v >= min_eff)
             }
         });
     }
@@ -233,7 +233,7 @@ pub fn filter_metrics(metrics: Vec<GPUMetrics>, options: &ReportOptions) -> Vec<
                 m.gpu_util
                     .trim_end_matches('%')
                     .parse::<f64>()
-                    .map_or(false, |v| v < GPU_IDLE_THRESHOLD_PERCENT)
+                    .is_ok_and(|v| v < GPU_IDLE_THRESHOLD_PERCENT)
             } else {
                 false
             };
@@ -242,7 +242,7 @@ pub fn filter_metrics(metrics: Vec<GPUMetrics>, options: &ReportOptions) -> Vec<
                 m.gpu_mem_eff
                     .trim_end_matches('%')
                     .parse::<f64>()
-                    .map_or(false, |v| v < GPU_MEMORY_IDLE_THRESHOLD_PERCENT)
+                    .is_ok_and(|v| v < GPU_MEMORY_IDLE_THRESHOLD_PERCENT)
             } else {
                 false
             };
