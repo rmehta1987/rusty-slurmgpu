@@ -18,21 +18,38 @@ cargo build --release
 
 ## Installation
 
-Use the included install script to copy the binary, create symlinks, and install the man page:
+### From git (recommended)
 
 ```bash
-cargo build --release
-./install.sh              # installs to ~/.local/bin (default)
+cargo install --git git@gitlab.oit.duke.edu:wjs/rusty-slurmgpu.git
+```
+
+This installs the `slurm-gpu` binary to `~/.cargo/bin/`. Then run the install script to create symlinks, shell completions, and man pages:
+
+```bash
+git clone git@gitlab.oit.duke.edu:wjs/rusty-slurmgpu.git
+cd rusty-slurmgpu
+./install.sh              # installs extras to ~/.local (default)
 ./install.sh /usr/local   # or specify a custom prefix
 ```
 
-Or install manually:
+### From release tarball
+
+Download from the [Releases page](https://gitlab.oit.duke.edu/wjs/rusty-slurmgpu/-/releases):
 
 ```bash
-install -m 755 target/release/slurm-gpu /usr/local/bin/
-for cmd in slurm-report slurm-usage slurm-stat slurm-show-tres slurm-tui; do
-    ln -sf slurm-gpu /usr/local/bin/$cmd
-done
+tar xzf slurm-gpu-0.1.0-linux-x86_64.tar.gz
+cd slurm-gpu-0.1.0-linux-x86_64
+./install.sh
+```
+
+### From source
+
+```bash
+git clone git@gitlab.oit.duke.edu:wjs/rusty-slurmgpu.git
+cd rusty-slurmgpu
+cargo build --release
+./install.sh
 ```
 
 Symlinks invoke the corresponding subcommand automatically — `slurm-report` behaves exactly like `slurm-gpu report`.
