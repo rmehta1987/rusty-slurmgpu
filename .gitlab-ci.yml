@@ -1,0 +1,139 @@
+stages:
+  - check
+  - test
+  - build
+  - package
+
+variables:
+  CARGO_HOME: ${CI_PROJECT_DIR}/.cargo
+  RUSTFLAGS: "-D warnings"
+
+# Cache the cargo registry and build artifacts between jobs
+cache:
+  key: ${CI_COMMIT_REF_SLUG}
+  paths:
+    - .cargo/registry/
+    - .cargo/git/
+    - target/
+
+# ---------------------------------------------------------------------------
+# Stage: check
+# ---------------------------------------------------------------------------
+lint:
+  stage: check
+  image: rust:latest
+  script:
+    - rustup component add clippy
+    - cargo clippy --all-targets -- -W clippy::all
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+
+fmt:
+  stage: check
+  image: rust:latest
+  script:
+    - rustup component add rustfmt
+    - cargo fmt -- --check
+  allow_failure: true
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+
+# ---------------------------------------------------------------------------
+# Stage: test
+# ---------------------------------------------------------------------------
+test:
+  stage: test
+  image: rust:latest
+  script:
+    - cargo test --verbose
+
+# ---------------------------------------------------------------------------
+# Stage: build
+# ---------------------------------------------------------------------------
+build-release:
+  stage: build
+  image: rust:latest
+  script:
+    - cargo build --release
+    - strip target/release/slurm-gpu
+    - ls -lh target/release/slurm-gpu
+  artifacts:
+    paths:
+      - target/release/slurm-gpu
+    expire_in: 1 hour
+
+# ---------------------------------------------------------------------------
+# Stage: package — downloadable tarball
+# ---------------------------------------------------------------------------
+package:
+  stage: package
+  image: rust:latest
+  needs:
+    - job: build-release
+      artifacts: true
+  script:
+    - |
+      VERSION=$(grep '^version' Cargo.toml | head -1 | sed 's/.*"\(.*\)"/\1/')
+      ARCHIVE="slurm-gpu-${VERSION}-linux-x86_64"
+      mkdir -p "${ARCHIVE}/bin" "${ARCHIVE}/share/man/man1" "${ARCHIVE}/share/bash-completion/completions" "${ARCHIVE}/share/zsh/site-functions" "${ARCHIVE}/share/fish/vendor_completions.d"
+
+      # Binary
+      cp target/release/slurm-gpu "${ARCHIVE}/bin/"
+      chmod +x "${ARCHIVE}/bin/slurm-gpu"
+
+      # Man page
+      cp man/slurm-gpu.1 "${ARCHIVE}/share/man/man1/"
+
+      # Shell completions
+      "${ARCHIVE}/bin/slurm-gpu" completions bash > "${ARCHIVE}/share/bash-completion/completions/slurm-gpu"
+      "${ARCHIVE}/bin/slurm-gpu" completions zsh  > "${ARCHIVE}/share/zsh/site-functions/_slurm-gpu"
+      "${ARCHIVE}/bin/slurm-gpu" completions fish > "${ARCHIVE}/share/fish/vendor_completions.d/slurm-gpu.fish"
+
+      # Install script
+      cp install.sh "${ARCHIVE}/"
+
+      # README
+      cp README.md "${ARCHIVE}/"
+
+      # Create tarball
+      tar czf "${ARCHIVE}.tar.gz" "${ARCHIVE}"
+      sha256sum "${ARCHIVE}.tar.gz" > "${ARCHIVE}.tar.gz.sha256"
+
+      echo "Package: ${ARCHIVE}.tar.gz"
+      ls -lh "${ARCHIVE}.tar.gz"
+  artifacts:
+    paths:
+      - slurm-gpu-*-linux-x86_64.tar.gz
+      - slurm-gpu-*-linux-x86_64.tar.gz.sha256
+    expire_in: 30 days
+  rules:
+    - if: $CI_COMMIT_TAG
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+
+# ---------------------------------------------------------------------------
+# Tagged releases — permanent artifacts
+# ---------------------------------------------------------------------------
+release:
+  stage: package
+  image: registry.gitlab.com/gitlab-org/release-cli:latest
+  needs:
+    - job: package
+      artifacts: true
+  script:
+    - echo "Creating release for ${CI_COMMIT_TAG}"
+  release:
+    tag_name: $CI_COMMIT_TAG
+    name: "slurm-gpu ${CI_COMMIT_TAG}"
+    description: "Release ${CI_COMMIT_TAG}"
+    assets:
+      links:
+        - name: "slurm-gpu-${CI_COMMIT_TAG}-linux-x86_64.tar.gz"
+          url: "${CI_PROJECT_URL}/-/jobs/${CI_JOB_ID}/artifacts/raw/slurm-gpu-${CI_COMMIT_TAG#v}-linux-x86_64.tar.gz"
+          link_type: package
+        - name: "SHA256 checksum"
+          url: "${CI_PROJECT_URL}/-/jobs/${CI_JOB_ID}/artifacts/raw/slurm-gpu-${CI_COMMIT_TAG#v}-linux-x86_64.tar.gz.sha256"
+          link_type: other
+  rules:
+    - if: $CI_COMMIT_TAG =~ /^v\d+\.\d+\.\d+/
