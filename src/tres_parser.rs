@@ -14,10 +14,32 @@ static GENERAL_TRES: Lazy<Regex> =
 
 static KNOWN_GPU_TYPES: Lazy<HashSet<&'static str>> = Lazy::new(|| {
     [
-        "a100", "nvidia_a100-sxm4-80gb", "a40", "a5000", "a6000", "6000", "6000_ada",
-        "v100", "p100", "k80", "rtx8000", "rtx_2080", "2080rtx", "2080", "rtx_5000",
-        "5000_ada", "titan_v", "h100", "h200", "h200_1g.18gb", "h200_3g.71gb",
-        "h200_4g.71gb", "rtx_pro_6000", "rtx_6000_pro", "6000_pro", "default",
+        "a100",
+        "nvidia_a100-sxm4-80gb",
+        "a40",
+        "a5000",
+        "a6000",
+        "6000",
+        "6000_ada",
+        "v100",
+        "p100",
+        "k80",
+        "rtx8000",
+        "rtx_2080",
+        "2080rtx",
+        "2080",
+        "rtx_5000",
+        "5000_ada",
+        "titan_v",
+        "h100",
+        "h200",
+        "h200_1g.18gb",
+        "h200_3g.71gb",
+        "h200_4g.71gb",
+        "rtx_pro_6000",
+        "rtx_6000_pro",
+        "6000_pro",
+        "default",
     ]
     .into_iter()
     .collect()
@@ -109,12 +131,10 @@ impl TresParser {
                         Err(_) => continue,
                     }
                 }
-                _ => {
-                    match value.parse::<f64>() {
-                        Ok(v) => ("generic", 1000, v),
-                        Err(_) => continue,
-                    }
-                }
+                _ => match value.parse::<f64>() {
+                    Ok(v) => ("generic", 1000, v),
+                    Err(_) => continue,
+                },
             };
 
             resources.push(TresResource {
@@ -161,9 +181,9 @@ impl TresParser {
     #[allow(dead_code)]
     pub(crate) fn extract_gpu_types(resources: &[TresResource]) -> HashMap<String, i32> {
         let mut gpu_types = HashMap::new();
-        let has_specific = resources.iter().any(|r| {
-            r.res_type == "gres" && Self::is_gpu_resource(&r.name) && r.name != "gpu"
-        });
+        let has_specific = resources
+            .iter()
+            .any(|r| r.res_type == "gres" && Self::is_gpu_resource(&r.name) && r.name != "gpu");
 
         for resource in resources {
             if resource.res_type == "gres" && Self::is_gpu_resource(&resource.name) {
@@ -203,7 +223,11 @@ impl TresParser {
             let value: f64 = cap[1].parse().unwrap_or(0.0);
             let unit = cap.get(2).map_or("M", |m| {
                 let s = m.as_str();
-                if s.is_empty() { "M" } else { s }
+                if s.is_empty() {
+                    "M"
+                } else {
+                    s
+                }
             });
 
             let multiplier = match unit {
@@ -342,7 +366,12 @@ impl TresParser {
                 } else if resource.name.to_lowercase().contains("gpu") {
                     if resource.name.contains(':') {
                         return Some(
-                            resource.name.split_once(':').map(|x| x.1).unwrap_or("gpu").to_string(),
+                            resource
+                                .name
+                                .split_once(':')
+                                .map(|x| x.1)
+                                .unwrap_or("gpu")
+                                .to_string(),
                         );
                     }
                     return Some(resource.name.clone());
@@ -366,17 +395,14 @@ mod tests {
     fn test_parse_tres_string_basic() {
         let resources = TresParser::parse_tres_string("cpu=4,mem=16G,node=1,billing=4");
         assert!(resources.iter().any(|r| r.name == "cpu" && r.count == 4.0));
-        assert!(
-            resources
-                .iter()
-                .any(|r| r.name == "mem" && (r.count - 16384.0).abs() < 0.1)
-        );
+        assert!(resources
+            .iter()
+            .any(|r| r.name == "mem" && (r.count - 16384.0).abs() < 0.1));
     }
 
     #[test]
     fn test_parse_tres_string_with_gpu() {
-        let resources =
-            TresParser::parse_tres_string("cpu=4,mem=16G,gres/gpu:a100=2");
+        let resources = TresParser::parse_tres_string("cpu=4,mem=16G,gres/gpu:a100=2");
         let gpu_count = TresParser::extract_gpu_count(&resources);
         assert_eq!(gpu_count, 2);
     }
@@ -420,19 +446,24 @@ mod tests {
     fn test_gpu_count_no_double_counting() {
         // Slurm TRES has both generic gres/gpu=N and specific gres/gpu:type=N
         // These are summary + breakdown, NOT additive
-        let resources =
-            TresParser::parse_tres_string("cpu=1,mem=30G,gres/gpu=1,gres/gpu:p100=1");
+        let resources = TresParser::parse_tres_string("cpu=1,mem=30G,gres/gpu=1,gres/gpu:p100=1");
         let gpu_count = TresParser::extract_gpu_count(&resources);
-        assert_eq!(gpu_count, 1, "should not double-count generic + specific GPU entries");
+        assert_eq!(
+            gpu_count, 1,
+            "should not double-count generic + specific GPU entries"
+        );
 
-        let resources =
-            TresParser::parse_tres_string("cpu=1,gres/gpu=2,gres/gpu:rtx_pro_6000=2");
+        let resources = TresParser::parse_tres_string("cpu=1,gres/gpu=2,gres/gpu:rtx_pro_6000=2");
         let gpu_count = TresParser::extract_gpu_count(&resources);
         assert_eq!(gpu_count, 2);
 
         let types = TresParser::extract_gpu_types(&resources);
         assert_eq!(types.get("rtx_pro_6000"), Some(&2));
-        assert_eq!(types.get("default"), None, "generic gpu should be excluded when specific types exist");
+        assert_eq!(
+            types.get("default"),
+            None,
+            "generic gpu should be excluded when specific types exist"
+        );
     }
 
     #[test]

@@ -8,8 +8,7 @@ use crate::models::{GPUMetrics, SlurmJob};
 use crate::parser::SlurmJobParser;
 use crate::reporter::GPUReporter;
 use crate::slurm_utils::{
-    build_node_gpu_mapping, get_partition_time_limits, run_sacct,
-    sort_summary_metrics,
+    build_node_gpu_mapping, get_partition_time_limits, run_sacct, sort_summary_metrics,
 };
 use crate::validation::InputValidator;
 
@@ -46,24 +45,19 @@ pub struct ReportOptions {
 pub fn fetch_and_parse_jobs(options: &ReportOptions) -> Result<Vec<SlurmJob>> {
     // Validate user-provided inputs
     if let Some(ref user) = options.user {
-        InputValidator::validate_user_name(user)
-            .map_err(|e| anyhow::anyhow!("{}", e))?;
+        InputValidator::validate_user_name(user).map_err(|e| anyhow::anyhow!("{}", e))?;
     }
     if let Some(ref partition) = options.partition_filter {
-        InputValidator::validate_partition_list(partition)
-            .map_err(|e| anyhow::anyhow!("{}", e))?;
+        InputValidator::validate_partition_list(partition).map_err(|e| anyhow::anyhow!("{}", e))?;
     }
     if let Some(ref jobs) = options.jobs {
-        InputValidator::validate_job_ids(jobs)
-            .map_err(|e| anyhow::anyhow!("{}", e))?;
+        InputValidator::validate_job_ids(jobs).map_err(|e| anyhow::anyhow!("{}", e))?;
     }
     if let Some(ref start) = options.starttime {
-        InputValidator::validate_time_string(start)
-            .map_err(|e| anyhow::anyhow!("{}", e))?;
+        InputValidator::validate_time_string(start).map_err(|e| anyhow::anyhow!("{}", e))?;
     }
     if let Some(ref end) = options.endtime {
-        InputValidator::validate_time_string(end)
-            .map_err(|e| anyhow::anyhow!("{}", e))?;
+        InputValidator::validate_time_string(end).map_err(|e| anyhow::anyhow!("{}", e))?;
     }
 
     // Show default message if no options specified
@@ -254,7 +248,10 @@ pub fn filter_metrics(metrics: Vec<GPUMetrics>, options: &ReportOptions) -> Vec<
     if metrics.is_empty() {
         let mut hints = Vec::new();
         if options.filter_state != "all" {
-            hints.push(format!("Remove --filter-state (currently '{}')", options.filter_state));
+            hints.push(format!(
+                "Remove --filter-state (currently '{}')",
+                options.filter_state
+            ));
         }
         if options.min_gpu_eff.is_some() {
             hints.push("Lower or remove --min-gpu-eff threshold".to_string());

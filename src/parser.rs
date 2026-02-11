@@ -10,8 +10,9 @@ use crate::tres_registry::TresRegistry;
 
 static TRES_PATTERN: Lazy<Regex> =
     Lazy::new(|| Regex::new(r"([^=,]+)=([^,]+)").expect("TRES_PATTERN regex is valid"));
-static MEMORY_UNIT_PATTERN: Lazy<Regex> =
-    Lazy::new(|| Regex::new(r"^(\d+(?:\.\d+)?)([KMGT]?)$").expect("MEMORY_UNIT_PATTERN regex is valid"));
+static MEMORY_UNIT_PATTERN: Lazy<Regex> = Lazy::new(|| {
+    Regex::new(r"^(\d+(?:\.\d+)?)([KMGT]?)$").expect("MEMORY_UNIT_PATTERN regex is valid")
+});
 
 pub struct SlurmJobParser;
 
@@ -351,9 +352,7 @@ impl SlurmJobParser {
                         resources.push(TresResource {
                             res_type: "gres".to_string(),
                             name: "gpuutil".to_string(),
-                            id: registry_ref
-                                .get_tres_id("gres", "gpuutil")
-                                .unwrap_or(1010),
+                            id: registry_ref.get_tres_id("gres", "gpuutil").unwrap_or(1010),
                             count: gpu_util,
                             task: None,
                             node: None,
@@ -365,9 +364,7 @@ impl SlurmJobParser {
                     resources.push(TresResource {
                         res_type: "gres".to_string(),
                         name: "gpumem".to_string(),
-                        id: registry_ref
-                            .get_tres_id("gres", "gpumem")
-                            .unwrap_or(1009),
+                        id: registry_ref.get_tres_id("gres", "gpumem").unwrap_or(1009),
                         count: gpu_mem_mb as f64,
                         task: None,
                         node: None,
@@ -378,9 +375,7 @@ impl SlurmJobParser {
                         resources.push(TresResource {
                             res_type: "gres".to_string(),
                             name: "gpu".to_string(),
-                            id: registry_ref
-                                .get_tres_id("gres", "gpu")
-                                .unwrap_or(1001),
+                            id: registry_ref.get_tres_id("gres", "gpu").unwrap_or(1001),
                             count: gpu_val,
                             task: None,
                             node: None,
@@ -519,8 +514,9 @@ impl SlurmJobParser {
         // Look for gres/gpu=N pattern
         static GPU_COUNT_RE: Lazy<Regex> =
             Lazy::new(|| Regex::new(r"gres/gpu=(\d+)").expect("GPU_COUNT_RE regex is valid"));
-        static GPU_TYPE_RE: Lazy<Regex> =
-            Lazy::new(|| Regex::new(r"gres/gpu:([^=,]+)=(\d+)").expect("GPU_TYPE_RE regex is valid"));
+        static GPU_TYPE_RE: Lazy<Regex> = Lazy::new(|| {
+            Regex::new(r"gres/gpu:([^=,]+)=(\d+)").expect("GPU_TYPE_RE regex is valid")
+        });
 
         if let Some(cap) = GPU_COUNT_RE.captures(tres_str) {
             gpu_count = cap[1].parse::<i32>().unwrap_or(0);
@@ -577,17 +573,25 @@ mod tests {
 
     #[test]
     fn test_parse_job_id_numeric() {
-        assert!(matches!(SlurmJobParser::parse_job_id("1234"), JobId::Numeric(1234)));
+        assert!(matches!(
+            SlurmJobParser::parse_job_id("1234"),
+            JobId::Numeric(1234)
+        ));
     }
 
     #[test]
     fn test_parse_job_id_array_task() {
-        assert!(matches!(SlurmJobParser::parse_job_id("1234_56"), JobId::ArrayTask(ref s) if s == "1234_56"));
+        assert!(
+            matches!(SlurmJobParser::parse_job_id("1234_56"), JobId::ArrayTask(ref s) if s == "1234_56")
+        );
     }
 
     #[test]
     fn test_parse_job_id_with_step() {
-        assert!(matches!(SlurmJobParser::parse_job_id("1234.batch"), JobId::Numeric(1234)));
+        assert!(matches!(
+            SlurmJobParser::parse_job_id("1234.batch"),
+            JobId::Numeric(1234)
+        ));
     }
 
     #[test]

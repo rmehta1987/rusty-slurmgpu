@@ -4,9 +4,9 @@ use comfy_table::{Attribute, Cell, CellAlignment, Color, Table};
 
 use crate::models::*;
 use crate::queued_jobs::QueuedJobsCollector;
-use crate::table_helpers::*;
 use crate::resource_slots::ResourceSlotCollector;
 use crate::resource_summary::ResourceSummarizer;
+use crate::table_helpers::*;
 use crate::tres_parser::TresParser;
 use crate::user_usage::{UserResourceUsage, UserUsageAnalyzer};
 
@@ -14,17 +14,11 @@ use crate::user_usage::{UserResourceUsage, UserUsageAnalyzer};
 pub struct GPUUsageCalculator;
 
 impl GPUUsageCalculator {
-    pub fn collect_gpu_slots_info(
-        debug: bool,
-        partitions: Option<&[String]>,
-    ) -> Vec<GPUSlotsInfo> {
+    pub fn collect_gpu_slots_info(debug: bool, partitions: Option<&[String]>) -> Vec<GPUSlotsInfo> {
         ResourceSlotCollector::collect_gpu_slots_info(debug, partitions)
     }
 
-    pub fn collect_cpu_slots_info(
-        debug: bool,
-        partitions: Option<&[String]>,
-    ) -> Vec<CPUSlotsInfo> {
+    pub fn collect_cpu_slots_info(debug: bool, partitions: Option<&[String]>) -> Vec<CPUSlotsInfo> {
         ResourceSlotCollector::collect_cpu_slots_info(debug, partitions)
     }
 
@@ -51,10 +45,7 @@ impl GPUUsageCalculator {
         UserUsageAnalyzer::get_all_users_resource_usage(debug, partitions)
     }
 
-    pub fn get_queued_jobs_info(
-        debug: bool,
-        partitions: Option<&[String]>,
-    ) -> Vec<QueuedJobInfo> {
+    pub fn get_queued_jobs_info(debug: bool, partitions: Option<&[String]>) -> Vec<QueuedJobInfo> {
         QueuedJobsCollector::get_queued_jobs_info(debug, partitions)
     }
 
@@ -98,9 +89,9 @@ impl GPUUsageReporter {
                 if user_gpu_data.len() == 1 {
                     format!("{}", user_cpu_count)
                 } else {
-                    let proportional_cpus =
-                        ((*gpu_count as f64 / total_gpus as f64) * user_cpu_count as f64).round()
-                            as i32;
+                    let proportional_cpus = ((*gpu_count as f64 / total_gpus as f64)
+                        * user_cpu_count as f64)
+                        .round() as i32;
                     if proportional_cpus > 0 {
                         format!("{}", proportional_cpus)
                     } else {
@@ -167,9 +158,9 @@ impl GPUUsageReporter {
                 if user_gpu_data.len() == 1 {
                     format!("{}", user_cpu_count)
                 } else {
-                    let proportional_cpus =
-                        ((*gpu_count as f64 / total_gpus as f64) * user_cpu_count as f64).round()
-                            as i32;
+                    let proportional_cpus = ((*gpu_count as f64 / total_gpus as f64)
+                        * user_cpu_count as f64)
+                        .round() as i32;
                     if proportional_cpus > 0 {
                         format!("{}", proportional_cpus)
                     } else {
@@ -191,8 +182,12 @@ impl GPUUsageReporter {
         // Total row
         table.add_row(vec![
             Cell::new("TOTAL").add_attribute(Attribute::Bold),
-            Cell::new(total_gpus.to_string()).add_attribute(Attribute::Bold).set_alignment(CellAlignment::Right),
-            Cell::new(user_cpu_count.to_string()).add_attribute(Attribute::Bold).set_alignment(CellAlignment::Right),
+            Cell::new(total_gpus.to_string())
+                .add_attribute(Attribute::Bold)
+                .set_alignment(CellAlignment::Right),
+            Cell::new(user_cpu_count.to_string())
+                .add_attribute(Attribute::Bold)
+                .set_alignment(CellAlignment::Right),
             Cell::new(""),
         ]);
 
@@ -235,8 +230,7 @@ impl GPUUsageReporter {
         if plain {
             Self::format_cluster_report_plain(gpu_summaries, cpu_summary, queue_summary)
         } else {
-            let table =
-                Self::format_cluster_report_rich(gpu_summaries, cpu_summary, queue_summary);
+            let table = Self::format_cluster_report_rich(gpu_summaries, cpu_summary, queue_summary);
             format!("{}", table)
         }
     }
@@ -289,9 +283,15 @@ impl GPUUsageReporter {
 
         table.add_row(vec![
             Cell::new("GPUs (TOTAL)").add_attribute(Attribute::Bold),
-            Cell::new(total_gpus.to_string()).add_attribute(Attribute::Bold).set_alignment(CellAlignment::Right),
-            Cell::new(used_gpus.to_string()).add_attribute(Attribute::Bold).set_alignment(CellAlignment::Right),
-            Cell::new((total_gpus - used_gpus).to_string()).add_attribute(Attribute::Bold).set_alignment(CellAlignment::Right),
+            Cell::new(total_gpus.to_string())
+                .add_attribute(Attribute::Bold)
+                .set_alignment(CellAlignment::Right),
+            Cell::new(used_gpus.to_string())
+                .add_attribute(Attribute::Bold)
+                .set_alignment(CellAlignment::Right),
+            Cell::new((total_gpus - used_gpus).to_string())
+                .add_attribute(Attribute::Bold)
+                .set_alignment(CellAlignment::Right),
             Cell::new(format!("{:.1}%", gpu_util))
                 .add_attribute(Attribute::Bold)
                 .fg(gpu_util_color)
@@ -305,9 +305,15 @@ impl GPUUsageReporter {
             Cell::new("CPUs (TOTAL)")
                 .add_attribute(Attribute::Bold)
                 .fg(Color::Yellow),
-            Cell::new(format!("{}", cpu_summary.total_cpus)).add_attribute(Attribute::Bold).set_alignment(CellAlignment::Right),
-            Cell::new(format!("{}", cpu_summary.used_cpus)).add_attribute(Attribute::Bold).set_alignment(CellAlignment::Right),
-            Cell::new(format!("{}", cpu_summary.available_cpus)).add_attribute(Attribute::Bold).set_alignment(CellAlignment::Right),
+            Cell::new(format!("{}", cpu_summary.total_cpus))
+                .add_attribute(Attribute::Bold)
+                .set_alignment(CellAlignment::Right),
+            Cell::new(format!("{}", cpu_summary.used_cpus))
+                .add_attribute(Attribute::Bold)
+                .set_alignment(CellAlignment::Right),
+            Cell::new(format!("{}", cpu_summary.available_cpus))
+                .add_attribute(Attribute::Bold)
+                .set_alignment(CellAlignment::Right),
             Cell::new(format!("{:.1}%", cpu_summary.utilization_percent()))
                 .add_attribute(Attribute::Bold)
                 .fg(cpu_util_color)
@@ -510,9 +516,9 @@ impl GPUUsageReporter {
                         if gpu_map.len() == 1 {
                             format!("{}", user_cpu_count)
                         } else {
-                            let proportional =
-                                ((**gpu_count as f64 / total_user_gpus as f64) * user_cpu_count as f64)
-                                    .round() as i32;
+                            let proportional = ((**gpu_count as f64 / total_user_gpus as f64)
+                                * user_cpu_count as f64)
+                                .round() as i32;
                             if proportional > 0 {
                                 format!("{}", proportional)
                             } else {
@@ -581,11 +587,18 @@ impl GPUUsageReporter {
         table.add_row(vec![
             Cell::new("TOTAL").add_attribute(Attribute::Bold),
             Cell::new(""),
-            Cell::new(grand_total_gpus.to_string()).add_attribute(Attribute::Bold).set_alignment(CellAlignment::Right),
-            Cell::new(grand_total_cpus.to_string()).add_attribute(Attribute::Bold).set_alignment(CellAlignment::Right),
+            Cell::new(grand_total_gpus.to_string())
+                .add_attribute(Attribute::Bold)
+                .set_alignment(CellAlignment::Right),
+            Cell::new(grand_total_cpus.to_string())
+                .add_attribute(Attribute::Bold)
+                .set_alignment(CellAlignment::Right),
             Cell::new(TresParser::format_memory_value(grand_total_memory as f64))
-                .add_attribute(Attribute::Bold).set_alignment(CellAlignment::Right),
-            Cell::new(format!("{} tasks", grand_total_queued)).add_attribute(Attribute::Bold).set_alignment(CellAlignment::Right),
+                .add_attribute(Attribute::Bold)
+                .set_alignment(CellAlignment::Right),
+            Cell::new(format!("{} tasks", grand_total_queued))
+                .add_attribute(Attribute::Bold)
+                .set_alignment(CellAlignment::Right),
         ]);
 
         table
@@ -657,10 +670,9 @@ impl GPUUsageReporter {
                         if gpu_map.len() == 1 {
                             format!("{}", user_cpu_count)
                         } else {
-                            let proportional =
-                                ((**gpu_count as f64 / total_user_gpus as f64)
-                                    * user_cpu_count as f64)
-                                    .round() as i32;
+                            let proportional = ((**gpu_count as f64 / total_user_gpus as f64)
+                                * user_cpu_count as f64)
+                                .round() as i32;
                             if proportional > 0 {
                                 format!("{}", proportional)
                             } else {
@@ -768,10 +780,7 @@ impl GPUUsageReporter {
             let queued_job_count = user_queued_jobs.len();
 
             if user_gpu_usage.is_empty() && queued_job_count == 0 {
-                eprintln!(
-                    "User {} has no running GPU jobs or queued jobs.",
-                    user
-                );
+                eprintln!("User {} has no running GPU jobs or queued jobs.", user);
                 return;
             }
 
@@ -806,7 +815,8 @@ impl GPUUsageReporter {
 
             let resource_usage =
                 GPUUsageCalculator::get_all_users_resource_usage(debug, partitions);
-            let queued_jobs_by_user = GPUUsageCalculator::get_queued_jobs_by_user(debug, partitions);
+            let queued_jobs_by_user =
+                GPUUsageCalculator::get_queued_jobs_by_user(debug, partitions);
 
             if resource_usage.gpu_usage.is_empty()
                 && resource_usage.cpu_usage.is_empty()
@@ -835,10 +845,7 @@ impl GPUUsageReporter {
 
             if gpu_slots_list.is_empty() && cpu_slots_list.is_empty() {
                 if let Some(parts) = partitions {
-                    eprintln!(
-                        "No nodes found in partition(s): {}.",
-                        parts.join(", ")
-                    );
+                    eprintln!("No nodes found in partition(s): {}.", parts.join(", "));
                 } else {
                     eprintln!("No nodes found.");
                 }
@@ -854,8 +861,7 @@ impl GPUUsageReporter {
             let queue_summary = GPUUsageCalculator::summarize_queue_info(&queued_jobs);
 
             if telegraf {
-                let output =
-                    Self::format_telegraf_output(&gpu_summaries, partitions);
+                let output = Self::format_telegraf_output(&gpu_summaries, partitions);
                 println!("{}", output);
                 return;
             }
@@ -884,18 +890,17 @@ impl GPUUsageReporter {
         for summary in summaries {
             let mut tags = vec![format!("gpu_type={}", summary.gpu_type)];
             if let Some(parts) = partitions {
-                let partition_str = parts
-                    .join(",")
-                    .replace(' ', "\\ ")
-                    .replace(',', "\\,");
+                let partition_str = parts.join(",").replace(' ', "\\ ").replace(',', "\\,");
                 tags.push(format!("partition={}", partition_str));
             }
 
-            let fields = [format!("total={}i", summary.total_gpus),
+            let fields = [
+                format!("total={}i", summary.total_gpus),
                 format!("used={}i", summary.used_gpus),
                 format!("available={}i", summary.available_gpus),
                 format!("utilization={:.2}", summary.utilization_percent()),
-                format!("node_count={}i", summary.nodes_with_type.len())];
+                format!("node_count={}i", summary.nodes_with_type.len()),
+            ];
 
             lines.push(format!(
                 "slurm_gpu_usage,{} {} {}",
@@ -921,18 +926,17 @@ impl GPUUsageReporter {
 
         let mut tags = vec!["gpu_type=ALL".to_string()];
         if let Some(parts) = partitions {
-            let partition_str = parts
-                .join(",")
-                .replace(' ', "\\ ")
-                .replace(',', "\\,");
+            let partition_str = parts.join(",").replace(' ', "\\ ").replace(',', "\\,");
             tags.push(format!("partition={}", partition_str));
         }
 
-        let fields = [format!("total={}i", total_all),
+        let fields = [
+            format!("total={}i", total_all),
             format!("used={}i", used_all),
             format!("available={}i", total_all - used_all),
             format!("utilization={:.2}", utilization_all),
-            format!("node_count={}i", total_nodes)];
+            format!("node_count={}i", total_nodes),
+        ];
 
         lines.push(format!(
             "slurm_gpu_usage,{} {} {}",
@@ -943,5 +947,4 @@ impl GPUUsageReporter {
 
         lines.join("\n")
     }
-
 }

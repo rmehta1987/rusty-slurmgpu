@@ -4,10 +4,13 @@ use regex::Regex;
 use crate::constants::MIN_VALID_JOB_ID;
 use crate::errors::GpuReportError;
 
-static USERNAME_PATTERN: Lazy<Regex> =
-    Lazy::new(|| Regex::new(r"^[a-zA-Z_][a-zA-Z0-9_-]*\$?$").expect("USERNAME_PATTERN regex is valid"));
-static PARTITION_PATTERN: Lazy<Regex> =
-    Lazy::new(|| Regex::new(r"^[a-zA-Z][a-zA-Z0-9_-]*[a-zA-Z0-9]$|^[a-zA-Z]$").expect("PARTITION_PATTERN regex is valid"));
+static USERNAME_PATTERN: Lazy<Regex> = Lazy::new(|| {
+    Regex::new(r"^[a-zA-Z_][a-zA-Z0-9_-]*\$?$").expect("USERNAME_PATTERN regex is valid")
+});
+static PARTITION_PATTERN: Lazy<Regex> = Lazy::new(|| {
+    Regex::new(r"^[a-zA-Z][a-zA-Z0-9_-]*[a-zA-Z0-9]$|^[a-zA-Z]$")
+        .expect("PARTITION_PATTERN regex is valid")
+});
 
 const FORBIDDEN_CHARS: &[char] = &[
     '$', '`', ';', '|', '&', '>', '<', '(', ')', '{', '}', '[', ']', '*', '?', '~', '!', '#',
@@ -342,10 +345,7 @@ mod tests {
         let result = InputValidator::validate_partition_list("gpu-common,scavenger-gpu").unwrap();
         assert_eq!(
             result,
-            Some(vec![
-                "gpu-common".to_string(),
-                "scavenger-gpu".to_string()
-            ])
+            Some(vec!["gpu-common".to_string(), "scavenger-gpu".to_string()])
         );
     }
 

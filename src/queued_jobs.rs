@@ -32,8 +32,7 @@ pub(crate) fn parse_array_task_string(task_string: &str) -> i32 {
 
             let bounds: Vec<&str> = range_part[0].splitn(2, '-').collect();
             if bounds.len() == 2 {
-                if let (Ok(start), Ok(end)) = (bounds[0].parse::<i32>(), bounds[1].parse::<i32>())
-                {
+                if let (Ok(start), Ok(end)) = (bounds[0].parse::<i32>(), bounds[1].parse::<i32>()) {
                     if step > 0 {
                         total += (end - start) / step + 1;
                     } else {
@@ -57,10 +56,7 @@ pub(crate) struct QueuedJobsCollector;
 
 impl QueuedJobsCollector {
     /// Get detailed information about queued/pending jobs.
-    pub fn get_queued_jobs_info(
-        debug: bool,
-        partitions: Option<&[String]>,
-    ) -> Vec<QueuedJobInfo> {
+    pub fn get_queued_jobs_info(debug: bool, partitions: Option<&[String]>) -> Vec<QueuedJobInfo> {
         let mut queued_jobs = Vec::new();
 
         let mut cmd = Command::new("/usr/bin/squeue");

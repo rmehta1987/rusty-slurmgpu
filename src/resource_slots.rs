@@ -8,10 +8,7 @@ pub(crate) struct ResourceSlotCollector;
 
 impl ResourceSlotCollector {
     /// Collect GPU slot information from all nodes.
-    pub fn collect_gpu_slots_info(
-        debug: bool,
-        partitions: Option<&[String]>,
-    ) -> Vec<GPUSlotsInfo> {
+    pub fn collect_gpu_slots_info(debug: bool, partitions: Option<&[String]>) -> Vec<GPUSlotsInfo> {
         let nodes = ClusterDataCollector::get_node_data(debug, partitions);
         let mut gpu_slots_list = Vec::new();
 
@@ -45,10 +42,7 @@ impl ResourceSlotCollector {
     }
 
     /// Collect CPU slot information from all nodes.
-    pub fn collect_cpu_slots_info(
-        debug: bool,
-        partitions: Option<&[String]>,
-    ) -> Vec<CPUSlotsInfo> {
+    pub fn collect_cpu_slots_info(debug: bool, partitions: Option<&[String]>) -> Vec<CPUSlotsInfo> {
         let nodes = ClusterDataCollector::get_node_data(debug, partitions);
         let mut cpu_slots_list = Vec::new();
 

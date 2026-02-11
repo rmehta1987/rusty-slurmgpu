@@ -27,23 +27,23 @@ use crate::tres_parser::TresParser;
 /// | H200 MIG 3g/4g | 71        | 72704     |
 pub(crate) fn gpu_memory_mb(gpu_type: &str) -> i64 {
     match gpu_type {
-        "a100" | "nvidia_a100-sxm4-80gb" => 81920,    // 80 GB
-        "a40" => 49152,                                 // 48 GB
-        "a5000" => 24576,                               // 24 GB
-        "a6000" | "6000" | "6000_ada" => 49152,         // 48 GB
+        "a100" | "nvidia_a100-sxm4-80gb" => 81920, // 80 GB
+        "a40" => 49152,                            // 48 GB
+        "a5000" => 24576,                          // 24 GB
+        "a6000" | "6000" | "6000_ada" => 49152,    // 48 GB
         "rtx_6000_pro" | "rtx_pro_6000" | "6000_pro" => 98304, // 96 GB
-        "v100" => 32768,                                // 32 GB
-        "p100" => 16384,                                // 16 GB
-        "k80" => 12288,                                 // 12 GB
-        "rtx8000" => 49152,                             // 48 GB
-        "rtx_2080" | "2080rtx" | "2080" => 11264,      // 11 GB
-        "rtx_5000" | "5000_ada" => 32768,               // 32 GB
-        "titan_v" => 12288,                             // 12 GB
-        "h100" => 81920,                                // 80 GB
-        "h200" => 143360,                               // 140 GB
-        "h200_1g.18gb" => 18432,                        // 18 GB (MIG)
-        "h200_3g.71gb" | "h200_4g.71gb" => 72704,      // 71 GB (MIG)
-        _ => 24576,                                     // 24 GB default
+        "v100" => 32768,                           // 32 GB
+        "p100" => 16384,                           // 16 GB
+        "k80" => 12288,                            // 12 GB
+        "rtx8000" => 49152,                        // 48 GB
+        "rtx_2080" | "2080rtx" | "2080" => 11264,  // 11 GB
+        "rtx_5000" | "5000_ada" => 32768,          // 32 GB
+        "titan_v" => 12288,                        // 12 GB
+        "h100" => 81920,                           // 80 GB
+        "h200" => 143360,                          // 140 GB
+        "h200_1g.18gb" => 18432,                   // 18 GB (MIG)
+        "h200_3g.71gb" | "h200_4g.71gb" => 72704,  // 71 GB (MIG)
+        _ => 24576,                                // 24 GB default
     }
 }
 
@@ -177,8 +177,7 @@ impl EfficiencyCalculator {
                                 max_gpu_util = max_gpu_util.max(resource.count);
                             }
                             "gpumem" => {
-                                max_gpu_mem =
-                                    max_gpu_mem.max(resource.count / BYTES_PER_MB);
+                                max_gpu_mem = max_gpu_mem.max(resource.count / BYTES_PER_MB);
                             }
                             _ => {}
                         }
@@ -216,8 +215,7 @@ impl EfficiencyCalculator {
                         }
                         "mem" => {
                             let mem_mb = resource.count;
-                            max_mem_usage_bytes =
-                                max_mem_usage_bytes.max(mem_mb * BYTES_PER_MB);
+                            max_mem_usage_bytes = max_mem_usage_bytes.max(mem_mb * BYTES_PER_MB);
                         }
                         _ => {}
                     }
@@ -311,7 +309,11 @@ impl EfficiencyCalculator {
             }
 
             let gpu_type = if resource.name.contains("gpu:") {
-                resource.name.split_once(':').map(|x| x.1).map(|s| s.to_string())
+                resource
+                    .name
+                    .split_once(':')
+                    .map(|x| x.1)
+                    .map(|s| s.to_string())
             } else if resource.name != "gpu" {
                 Some(resource.name.clone())
             } else {
@@ -368,9 +370,8 @@ impl EfficiencyCalculator {
 
                 let gpu_mem_eff = if gpu_count > 0 && gpu_mem_mb > 0.0 {
                     let gpu_total_mb = gpu_memory_mb(&detected_gpu_type);
-                    let eff =
-                        (gpu_mem_mb / (gpu_total_mb as f64 * gpu_count as f64))
-                            * MAX_EFFICIENCY_PERCENT;
+                    let eff = (gpu_mem_mb / (gpu_total_mb as f64 * gpu_count as f64))
+                        * MAX_EFFICIENCY_PERCENT;
 
                     if debug && eff > MAX_EFFICIENCY_PERCENT {
                         eprintln!(
@@ -385,7 +386,13 @@ impl EfficiencyCalculator {
                 };
 
                 (
-                    time_eff, cpu_eff, mem_eff, gpu_eff, gpu_util, gpu_mem_mb, gpu_mem_eff,
+                    time_eff,
+                    cpu_eff,
+                    mem_eff,
+                    gpu_eff,
+                    gpu_util,
+                    gpu_mem_mb,
+                    gpu_mem_eff,
                 )
             };
 
@@ -494,7 +501,11 @@ impl EfficiencyCalculator {
             } else if by_partition {
                 format!("{}|{}", metric.user, metric.partition)
             } else if by_account {
-                format!("{}|{}", metric.user, metric.account.as_deref().unwrap_or(""))
+                format!(
+                    "{}|{}",
+                    metric.user,
+                    metric.account.as_deref().unwrap_or("")
+                )
             } else {
                 metric.user.clone()
             };
@@ -560,7 +571,10 @@ impl EfficiencyCalculator {
                 .collect();
 
             let avg_gpu_eff = Self::average_percentage(
-                &completed_metrics.iter().map(|m| m.gpu_eff.as_str()).collect::<Vec<_>>(),
+                &completed_metrics
+                    .iter()
+                    .map(|m| m.gpu_eff.as_str())
+                    .collect::<Vec<_>>(),
             );
             let avg_gpu_mem_eff = Self::average_percentage(
                 &completed_metrics

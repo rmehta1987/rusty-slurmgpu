@@ -4,7 +4,9 @@ use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Borders, Clear, Paragraph, Wrap};
 use ratatui::Frame;
 
-use crate::constants::{EXCELLENT_EFFICIENCY_THRESHOLD, GOOD_EFFICIENCY_THRESHOLD, POOR_EFFICIENCY_THRESHOLD};
+use crate::constants::{
+    EXCELLENT_EFFICIENCY_THRESHOLD, GOOD_EFFICIENCY_THRESHOLD, POOR_EFFICIENCY_THRESHOLD,
+};
 
 pub fn efficiency_color(value: &str) -> Color {
     if value == "---" {
@@ -65,7 +67,12 @@ pub fn render_help_popup(f: &mut Frame) {
     f.render_widget(Clear, area);
 
     let help_text = vec![
-        Line::from(Span::styled("Key Bindings", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD))),
+        Line::from(Span::styled(
+            "Key Bindings",
+            Style::default()
+                .fg(Color::Cyan)
+                .add_modifier(Modifier::BOLD),
+        )),
         Line::from(""),
         Line::from(vec![
             Span::styled("  q       ", Style::default().fg(Color::Yellow)),
@@ -116,7 +123,10 @@ pub fn render_help_popup(f: &mut Frame) {
             Span::raw("Jump to first/last row"),
         ]),
         Line::from(""),
-        Line::from(Span::styled("Press any key to close", Style::default().fg(Color::DarkGray))),
+        Line::from(Span::styled(
+            "Press any key to close",
+            Style::default().fg(Color::DarkGray),
+        )),
     ];
 
     let block = Block::default()

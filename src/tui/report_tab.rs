@@ -64,8 +64,17 @@ pub fn render_report_tab(
         .collect();
 
     let header_cells = [
-        "User", "JobID", "State", "Elapsed", "TimeEff", "CPUEff",
-        "MemEff", "GPUEff", "GPUUtil", "GPUMemEff", "Partition",
+        "User",
+        "JobID",
+        "State",
+        "Elapsed",
+        "TimeEff",
+        "CPUEff",
+        "MemEff",
+        "GPUEff",
+        "GPUUtil",
+        "GPUMemEff",
+        "Partition",
     ]
     .iter()
     .map(|h| {
@@ -104,17 +113,17 @@ pub fn render_report_tab(
     let table = Table::new(
         rows,
         [
-            Constraint::Min(8),   // User
-            Constraint::Min(8),   // JobID
-            Constraint::Min(9),   // State
-            Constraint::Min(8),   // Elapsed
-            Constraint::Min(7),   // TimeEff
-            Constraint::Min(6),   // CPUEff
-            Constraint::Min(6),   // MemEff
-            Constraint::Min(6),   // GPUEff
-            Constraint::Min(7),   // GPUUtil
-            Constraint::Min(7),   // GPUMemEff
-            Constraint::Min(9),   // Partition
+            Constraint::Min(8), // User
+            Constraint::Min(8), // JobID
+            Constraint::Min(9), // State
+            Constraint::Min(8), // Elapsed
+            Constraint::Min(7), // TimeEff
+            Constraint::Min(6), // CPUEff
+            Constraint::Min(6), // MemEff
+            Constraint::Min(6), // GPUEff
+            Constraint::Min(7), // GPUUtil
+            Constraint::Min(7), // GPUMemEff
+            Constraint::Min(9), // Partition
         ],
     )
     .header(header)

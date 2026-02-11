@@ -76,8 +76,7 @@ impl SstatMonitor {
     pub fn get_job_info(job_id: &str, debug: bool) -> Option<serde_json::Value> {
         let mut cmd = Command::new("squeue");
         cmd.args(["--json", "-j", job_id]);
-        let output = match run_with_timeout(cmd, SLURM_COMMAND_TIMEOUT)
-        {
+        let output = match run_with_timeout(cmd, SLURM_COMMAND_TIMEOUT) {
             Ok(output) if output.status.success() => output,
             Ok(_) | Err(_) => {
                 if debug {
@@ -109,7 +108,10 @@ impl SstatMonitor {
             if let Some((key, value)) = part.split_once('=') {
                 let parsed = if (key == "mem" || key == "gres/gpumem")
                     && !value.is_empty()
-                    && value.as_bytes().last().is_some_and(|b| b.is_ascii_alphabetic())
+                    && value
+                        .as_bytes()
+                        .last()
+                        .is_some_and(|b| b.is_ascii_alphabetic())
                 {
                     let unit = match value.as_bytes().last() {
                         Some(b) => b.to_ascii_uppercase() as char,
@@ -241,7 +243,10 @@ impl SstatMonitor {
         }
 
         let tres_ave = Self::parse_tres_string(
-            sstat.get("TRESUsageInAve").map(|s| s.as_str()).unwrap_or(""),
+            sstat
+                .get("TRESUsageInAve")
+                .map(|s| s.as_str())
+                .unwrap_or(""),
         );
 
         let gpu_util_val = tres_ave.get("gres/gpuutil").copied().unwrap_or(0.0);
@@ -362,7 +367,12 @@ impl SstatMonitor {
         let (elapsed, elapsed_seconds) = if start_time > 0 {
             let secs = now - start_time;
             (
-                format!("{:02}:{:02}:{:02}", secs / 3600, (secs % 3600) / 60, secs % 60),
+                format!(
+                    "{:02}:{:02}:{:02}",
+                    secs / 3600,
+                    (secs % 3600) / 60,
+                    secs % 60
+                ),
                 secs,
             )
         } else {
@@ -376,20 +386,38 @@ impl SstatMonitor {
             .filter(|t| t != "gpu")
             .or_else(|| node_gpu_map.get(&node_name).cloned())
             .unwrap_or_else(|| "default".to_string());
-        let total_gpu_mem_mb = if alloc_gpus > 0 { gpu_memory_mb(&gpu_type) } else { 0 };
+        let total_gpu_mem_mb = if alloc_gpus > 0 {
+            gpu_memory_mb(&gpu_type)
+        } else {
+            0
+        };
 
         // Calculate efficiency metrics from sstat
         let (gpu_util, gpu_mem, gpu_mem_eff, gpu_eff, cpu_eff, mem_eff) =
             if let Some(sstat) = sstat_data {
                 let (gu, gm, gme, ge) = Self::calculate_gpu_metrics(
-                    sstat, alloc_gpus, total_gpu_mem_mb, &job_id_str, debug,
+                    sstat,
+                    alloc_gpus,
+                    total_gpu_mem_mb,
+                    &job_id_str,
+                    debug,
                 );
                 let (ce, me) = Self::calculate_cpu_mem_efficiency(
-                    sstat, tres_alloc_str, elapsed_seconds, alloc_cpus,
+                    sstat,
+                    tres_alloc_str,
+                    elapsed_seconds,
+                    alloc_cpus,
                 );
                 (gu, gm, gme, ge, ce, me)
             } else {
-                ("---".into(), "---".into(), "---".into(), "---".into(), "---".into(), "---".into())
+                (
+                    "---".into(),
+                    "---".into(),
+                    "---".into(),
+                    "---".into(),
+                    "---".into(),
+                    "---".into(),
+                )
             };
 
         // Time efficiency
@@ -400,7 +428,10 @@ impl SstatMonitor {
             .unwrap_or(0)
             * 60;
         let time_eff = if time_limit_seconds > 0 && elapsed_seconds > 0 {
-            format!("{:.1}%", (elapsed_seconds as f64 / time_limit_seconds as f64 * 100.0).min(100.0))
+            format!(
+                "{:.1}%",
+                (elapsed_seconds as f64 / time_limit_seconds as f64 * 100.0).min(100.0)
+            )
         } else {
             "---".to_string()
         };
@@ -427,8 +458,16 @@ impl SstatMonitor {
             time_eff,
             cpu_eff,
             mem_eff,
-            node: if node_name.is_empty() { None } else { Some(node_name) },
-            gpu_type: if gpu_type != "default" && alloc_gpus > 0 { Some(gpu_type) } else { None },
+            node: if node_name.is_empty() {
+                None
+            } else {
+                Some(node_name)
+            },
+            gpu_type: if gpu_type != "default" && alloc_gpus > 0 {
+                Some(gpu_type)
+            } else {
+                None
+            },
             gpu_count: alloc_gpus,
             account: job_info
                 .get("account")
@@ -442,7 +481,11 @@ impl SstatMonitor {
         if mem_str.is_empty() {
             return None;
         }
-        if mem_str.as_bytes().last().is_some_and(|b| b.is_ascii_alphabetic()) {
+        if mem_str
+            .as_bytes()
+            .last()
+            .is_some_and(|b| b.is_ascii_alphabetic())
+        {
             let unit = match mem_str.as_bytes().last() {
                 Some(b) => b.to_ascii_uppercase() as char,
                 None => return None,
@@ -488,10 +531,7 @@ impl SstatMonitor {
             return metrics;
         }
 
-        eprintln!(
-            "Monitoring {} jobs...",
-            jobs_to_monitor.len()
-        );
+        eprintln!("Monitoring {} jobs...", jobs_to_monitor.len());
 
         let mut failed_sstat = 0;
 

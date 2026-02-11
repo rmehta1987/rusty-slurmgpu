@@ -12,9 +12,9 @@ use ratatui::backend::CrosstermBackend;
 use ratatui::layout::{Constraint, Layout, Rect};
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
+use ratatui::widgets::TableState;
 use ratatui::widgets::{Block, Borders, Paragraph, Tabs};
 use ratatui::Terminal;
-use ratatui::widgets::TableState;
 
 use crate::models::*;
 use crate::tui::data::*;
@@ -32,7 +32,14 @@ pub enum ActiveTab {
     Stat,
 }
 
-const STATE_FILTERS: &[&str] = &["all", "RUNNING", "PENDING", "COMPLETED", "FAILED", "CANCELLED"];
+const STATE_FILTERS: &[&str] = &[
+    "all",
+    "RUNNING",
+    "PENDING",
+    "COMPLETED",
+    "FAILED",
+    "CANCELLED",
+];
 
 pub struct App {
     pub active_tab: ActiveTab,
@@ -171,17 +178,10 @@ impl App {
             self.config.user.clone(),
             self.config.starttime.clone(),
         );
-        fetch_usage_async(
-            self.tx.clone(),
-            self.config.partitions.clone(),
-        );
+        fetch_usage_async(self.tx.clone(), self.config.partitions.clone());
 
         let stat_user = self.config.effective_user.clone();
-        fetch_stat_async(
-            self.tx.clone(),
-            stat_user,
-            self.config.partition.clone(),
-        );
+        fetch_stat_async(self.tx.clone(), stat_user, self.config.partition.clone());
     }
 
     pub fn handle_data_message(&mut self, msg: DataMessage) {
@@ -497,11 +497,11 @@ fn draw_ui(f: &mut ratatui::Frame, app: &mut App) {
     let search_height = if show_search { 1 } else { 0 };
 
     let chunks = Layout::vertical([
-        Constraint::Length(3),            // Tab bar
-        Constraint::Length(1),            // Status line
+        Constraint::Length(3),             // Tab bar
+        Constraint::Length(1),             // Status line
         Constraint::Length(search_height), // Search bar (only when active)
-        Constraint::Min(5),              // Content
-        Constraint::Length(1),            // Footer
+        Constraint::Min(5),                // Content
+        Constraint::Length(1),             // Footer
     ])
     .split(f.area());
 
@@ -546,10 +546,18 @@ fn draw_tab_bar(f: &mut ratatui::Frame, area: Rect, app: &App) {
 
 fn draw_status_line(f: &mut ratatui::Frame, area: Rect, app: &App) {
     let refresh_text = if app.paused {
-        Span::styled("PAUSED", Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD))
+        Span::styled(
+            "PAUSED",
+            Style::default()
+                .fg(Color::Yellow)
+                .add_modifier(Modifier::BOLD),
+        )
     } else {
         Span::styled(
-            format!("Refresh in {}s ({}s interval)", app.seconds_until_refresh, app.refresh_interval),
+            format!(
+                "Refresh in {}s ({}s interval)",
+                app.seconds_until_refresh, app.refresh_interval
+            ),
             Style::default().fg(Color::DarkGray),
         )
     };
@@ -578,7 +586,10 @@ fn draw_status_line(f: &mut ratatui::Frame, area: Rect, app: &App) {
         Span::raw(" "),
         refresh_text,
         filter_text,
-        Span::styled("  (s filter, +/- interval, ? help)", Style::default().fg(Color::DarkGray)),
+        Span::styled(
+            "  (s filter, +/- interval, ? help)",
+            Style::default().fg(Color::DarkGray),
+        ),
         loading_indicator,
     ]);
 
@@ -645,16 +656,8 @@ fn draw_content(f: &mut ratatui::Frame, area: Rect, app: &mut App) {
 }
 
 fn draw_footer(f: &mut ratatui::Frame, area: Rect, app: &App) {
-    let partition_info = app
-        .config
-        .partition
-        .as_deref()
-        .unwrap_or("all");
-    let user_info = app
-        .config
-        .user
-        .as_deref()
-        .unwrap_or("all");
+    let partition_info = app.config.partition.as_deref().unwrap_or("all");
+    let user_info = app.config.user.as_deref().unwrap_or("all");
 
     let job_count = match app.active_tab {
         ActiveTab::Report => app.report_metrics.len(),
@@ -662,12 +665,13 @@ fn draw_footer(f: &mut ratatui::Frame, area: Rect, app: &App) {
         ActiveTab::Stat => app.stat_metrics.len(),
     };
 
-    let line = Line::from(vec![
-        Span::styled(
-            format!(" Items: {} | Partition: {} | User: {} ", job_count, partition_info, user_info),
-            Style::default().fg(Color::DarkGray),
+    let line = Line::from(vec![Span::styled(
+        format!(
+            " Items: {} | Partition: {} | User: {} ",
+            job_count, partition_info, user_info
         ),
-    ]);
+        Style::default().fg(Color::DarkGray),
+    )]);
 
     f.render_widget(Paragraph::new(line), area);
 }

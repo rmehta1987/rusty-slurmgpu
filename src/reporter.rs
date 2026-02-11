@@ -107,7 +107,14 @@ impl GPUReporter {
 
             let mut avg_parts = vec![
                 format!("{:<11}", weighted_avg.user),
-                format!("{:<11}", if weighted_avg.job_id.to_string() == "0" { "".to_string() } else { weighted_avg.job_id.to_string() }),
+                format!(
+                    "{:<11}",
+                    if weighted_avg.job_id.to_string() == "0" {
+                        "".to_string()
+                    } else {
+                        weighted_avg.job_id.to_string()
+                    }
+                ),
                 format!("{:<10}", "WEIGHTED"),
                 format!("{:>8}", weighted_avg.elapsed),
                 format!("{:>7}", weighted_avg.time_eff),
@@ -212,15 +219,21 @@ impl GPUReporter {
             let mut avg_row: Vec<Cell> = vec![
                 Cell::new("").add_attribute(Attribute::Bold),
                 Cell::new("").add_attribute(Attribute::Bold),
-                Cell::new("WEIGHTED AVG").add_attribute(Attribute::Bold).fg(Color::Cyan),
-                Cell::new(&weighted_avg.elapsed).add_attribute(Attribute::Bold).set_alignment(CellAlignment::Right),
+                Cell::new("WEIGHTED AVG")
+                    .add_attribute(Attribute::Bold)
+                    .fg(Color::Cyan),
+                Cell::new(&weighted_avg.elapsed)
+                    .add_attribute(Attribute::Bold)
+                    .set_alignment(CellAlignment::Right),
                 efficiency_cell(&weighted_avg.time_eff).add_attribute(Attribute::Bold),
                 efficiency_cell(&weighted_avg.cpu_eff).add_attribute(Attribute::Bold),
                 efficiency_cell(&weighted_avg.mem_eff).add_attribute(Attribute::Bold),
                 efficiency_cell(&weighted_avg.gpu_eff).add_attribute(Attribute::Bold),
                 efficiency_cell(&weighted_avg.gpu_util).add_attribute(Attribute::Bold),
                 efficiency_cell(&weighted_avg.gpu_mem_eff).add_attribute(Attribute::Bold),
-                Cell::new(&weighted_avg.gpu_mem).add_attribute(Attribute::Bold).set_alignment(CellAlignment::Right),
+                Cell::new(&weighted_avg.gpu_mem)
+                    .add_attribute(Attribute::Bold)
+                    .set_alignment(CellAlignment::Right),
             ];
 
             if detailed {
@@ -253,7 +266,8 @@ impl GPUReporter {
         }
 
         if use_rich {
-            let table = Self::format_rich_report(metrics, show_partition, detailed, show_weighted_avg);
+            let table =
+                Self::format_rich_report(metrics, show_partition, detailed, show_weighted_avg);
             println!("{table}");
         } else {
             let report = Self::format_report(metrics, show_partition, detailed, show_weighted_avg);
@@ -294,10 +308,15 @@ impl GPUReporter {
                 format!(
                     "{:<14} {:>5} {:>10.1} {:>9} {:>7} {:>8} {:>8} {:>11.1}% {:>11.1}% {:>12.1}%",
                     summary.account.as_deref().unwrap_or("N/A"),
-                    summary.job_count, summary.total_gpu_hours,
-                    summary.completed_jobs, summary.failed_jobs,
-                    summary.running_jobs, summary.pending_jobs,
-                    summary.avg_gpu_eff, summary.avg_gpu_mem_eff, summary.avg_time_eff
+                    summary.job_count,
+                    summary.total_gpu_hours,
+                    summary.completed_jobs,
+                    summary.failed_jobs,
+                    summary.running_jobs,
+                    summary.pending_jobs,
+                    summary.avg_gpu_eff,
+                    summary.avg_gpu_mem_eff,
+                    summary.avg_time_eff
                 )
             } else if by_partition {
                 format!(
@@ -320,10 +339,16 @@ impl GPUReporter {
             } else {
                 format!(
                     "{:<11} {:>5} {:>10.1} {:>9} {:>7} {:>8} {:>8} {:>11.1}% {:>11.1}% {:>12.1}%",
-                    summary.user, summary.job_count, summary.total_gpu_hours,
-                    summary.completed_jobs, summary.failed_jobs,
-                    summary.running_jobs, summary.pending_jobs,
-                    summary.avg_gpu_eff, summary.avg_gpu_mem_eff, summary.avg_time_eff
+                    summary.user,
+                    summary.job_count,
+                    summary.total_gpu_hours,
+                    summary.completed_jobs,
+                    summary.failed_jobs,
+                    summary.running_jobs,
+                    summary.pending_jobs,
+                    summary.avg_gpu_eff,
+                    summary.avg_gpu_mem_eff,
+                    summary.avg_time_eff
                 )
             };
             lines.push(line);
@@ -376,9 +401,13 @@ impl GPUReporter {
             } else {
                 row.push(Cell::new(&summary.user).fg(Color::Magenta));
                 if by_partition {
-                    row.push(Cell::new(summary.partition.as_deref().unwrap_or("N/A")).fg(Color::Blue));
+                    row.push(
+                        Cell::new(summary.partition.as_deref().unwrap_or("N/A")).fg(Color::Blue),
+                    );
                 } else if by_account {
-                    row.push(Cell::new(summary.account.as_deref().unwrap_or("N/A")).fg(Color::Cyan));
+                    row.push(
+                        Cell::new(summary.account.as_deref().unwrap_or("N/A")).fg(Color::Cyan),
+                    );
                 }
             }
 
@@ -388,7 +417,8 @@ impl GPUReporter {
 
             row.extend([
                 Cell::new(summary.job_count.to_string()).set_alignment(CellAlignment::Right),
-                Cell::new(format!("{:.1}", summary.total_gpu_hours)).set_alignment(CellAlignment::Right),
+                Cell::new(format!("{:.1}", summary.total_gpu_hours))
+                    .set_alignment(CellAlignment::Right),
                 Cell::new(summary.completed_jobs.to_string()).set_alignment(CellAlignment::Right),
                 Cell::new(summary.failed_jobs.to_string()).set_alignment(CellAlignment::Right),
                 Cell::new(summary.running_jobs.to_string()).set_alignment(CellAlignment::Right),
@@ -418,10 +448,12 @@ impl GPUReporter {
         }
 
         if use_rich {
-            let table = Self::format_rich_summary_report(summaries, by_partition, by_account, account_only);
+            let table =
+                Self::format_rich_summary_report(summaries, by_partition, by_account, account_only);
             println!("{table}");
         } else {
-            let report = Self::format_summary_report(summaries, by_partition, by_account, account_only);
+            let report =
+                Self::format_summary_report(summaries, by_partition, by_account, account_only);
             print!("{report}");
         }
     }
@@ -465,7 +497,11 @@ impl GPUReporter {
         };
 
         let gpu_mem_val = if weighted_avg.gpu_mem != "---" && !weighted_avg.gpu_mem.is_empty() {
-            weighted_avg.gpu_mem.trim_end_matches('G').parse::<f64>().unwrap_or(0.0)
+            weighted_avg
+                .gpu_mem
+                .trim_end_matches('G')
+                .parse::<f64>()
+                .unwrap_or(0.0)
         } else {
             0.0
         };

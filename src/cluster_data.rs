@@ -7,10 +7,7 @@ pub(crate) struct ClusterDataCollector;
 
 impl ClusterDataCollector {
     /// Get node data from scontrol show node command.
-    pub fn get_node_data(
-        debug: bool,
-        partitions: Option<&[String]>,
-    ) -> Vec<NodeInfo> {
+    pub fn get_node_data(debug: bool, partitions: Option<&[String]>) -> Vec<NodeInfo> {
         let cmd = ["scontrol", "show", "node", "--json"];
 
         if debug {
@@ -19,8 +16,7 @@ impl ClusterDataCollector {
 
         let mut cmd = Command::new("scontrol");
         cmd.args(["show", "node", "--json"]);
-        let output = match run_with_timeout(cmd, SLURM_COMMAND_TIMEOUT)
-        {
+        let output = match run_with_timeout(cmd, SLURM_COMMAND_TIMEOUT) {
             Ok(output) if output.status.success() => output,
             Ok(output) => {
                 let stderr = String::from_utf8_lossy(&output.stderr);
@@ -73,9 +69,7 @@ impl ClusterDataCollector {
             let original_count = nodes.len();
             nodes.retain(|node| {
                 if let Some(ref node_partitions) = node.partitions {
-                    node_partitions
-                        .iter()
-                        .any(|p| partition_list.contains(p))
+                    node_partitions.iter().any(|p| partition_list.contains(p))
                 } else {
                     false
                 }

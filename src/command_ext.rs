@@ -11,10 +11,7 @@ pub(crate) const SLURM_COMMAND_TIMEOUT: Duration = Duration::from_secs(30);
 /// Spawns the command in a background thread and waits with a timeout.
 /// If the timeout expires, the process is killed and an error is returned.
 pub(crate) fn run_with_timeout(mut cmd: Command, timeout: Duration) -> io::Result<Output> {
-    let child = cmd
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()?;
+    let child = cmd.stdout(Stdio::piped()).stderr(Stdio::piped()).spawn()?;
 
     let pid = child.id();
     let (tx, rx) = mpsc::channel();
@@ -30,14 +27,9 @@ pub(crate) fn run_with_timeout(mut cmd: Command, timeout: Duration) -> io::Resul
             let _ = Command::new("kill").arg(pid.to_string()).output();
             Err(io::Error::new(
                 io::ErrorKind::TimedOut,
-                format!(
-                    "Slurm command timed out after {}s",
-                    timeout.as_secs()
-                ),
+                format!("Slurm command timed out after {}s", timeout.as_secs()),
             ))
         }
-        Err(_) => Err(io::Error::other(
-            "Command thread panicked",
-        )),
+        Err(_) => Err(io::Error::other("Command thread panicked")),
     }
 }

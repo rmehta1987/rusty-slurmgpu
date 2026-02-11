@@ -1,7 +1,7 @@
 pub mod calculator;
 pub mod cli_helpers;
-pub mod command_ext;
 pub mod cluster_data;
+pub mod command_ext;
 pub mod constants;
 pub mod errors;
 pub mod gpu_usage;

@@ -21,10 +21,7 @@ pub(crate) struct UserUsageAnalyzer;
 impl UserUsageAnalyzer {
     /// Get GPU usage by type for a specific user.
     /// Returns: HashMap mapping GPU type to (gpu_count, node_count)
-    pub fn get_user_gpu_usage(
-        user: &str,
-        debug: bool,
-    ) -> HashMap<String, (i32, usize)> {
+    pub fn get_user_gpu_usage(user: &str, debug: bool) -> HashMap<String, (i32, usize)> {
         let mut gpu_usage: HashMap<String, i32> = HashMap::new();
         let mut gpu_nodes: HashMap<String, std::collections::HashSet<String>> = HashMap::new();
 
@@ -90,7 +87,10 @@ impl UserUsageAnalyzer {
                         let gpu_type = if gpu_type_from_tres != "unknown" {
                             gpu_type_from_tres
                         } else if let Some(ref nn) = node_name {
-                            node_gpu_map.get(nn).cloned().unwrap_or_else(|| "unknown".to_string())
+                            node_gpu_map
+                                .get(nn)
+                                .cloned()
+                                .unwrap_or_else(|| "unknown".to_string())
                         } else {
                             "unknown".to_string()
                         };
@@ -256,7 +256,10 @@ impl UserUsageAnalyzer {
                         let gpu_type = if gpu_type_from_tres != "unknown" {
                             gpu_type_from_tres
                         } else if let Some(ref nn) = node_name {
-                            node_gpu_map.get(nn).cloned().unwrap_or_else(|| "unknown".to_string())
+                            node_gpu_map
+                                .get(nn)
+                                .cloned()
+                                .unwrap_or_else(|| "unknown".to_string())
                         } else {
                             "unknown".to_string()
                         };
@@ -345,18 +348,12 @@ mod tests {
 
     #[test]
     fn test_parse_node_name_simple() {
-        assert_eq!(
-            parse_node_name("linux46"),
-            Some("linux46".to_string())
-        );
+        assert_eq!(parse_node_name("linux46"), Some("linux46".to_string()));
     }
 
     #[test]
     fn test_parse_node_name_range() {
-        assert_eq!(
-            parse_node_name("linux[51,55]"),
-            Some("linux51".to_string())
-        );
+        assert_eq!(parse_node_name("linux[51,55]"), Some("linux51".to_string()));
     }
 
     #[test]

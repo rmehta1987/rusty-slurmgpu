@@ -246,9 +246,7 @@ pub struct StatArgs {
 
 fn main() -> Result<()> {
     // Check argv[0] for symlink dispatch
-    let argv0 = env::args()
-        .next()
-        .unwrap_or_default();
+    let argv0 = env::args().next().unwrap_or_default();
     let binary_name = std::path::Path::new(&argv0)
         .file_name()
         .and_then(|s| s.to_str())
@@ -375,7 +373,9 @@ fn run_report(args: ReportArgs) -> Result<()> {
     // Generate output
     if options.summary || options.summary_by_partition || options.summary_by_account {
         if options.telegraf {
-            eprintln!("Warning: --telegraf is not supported with summary reports, ignoring --telegraf");
+            eprintln!(
+                "Warning: --telegraf is not supported with summary reports, ignoring --telegraf"
+            );
         }
         generate_and_output_summary(&metrics, &options)?;
     } else {
@@ -399,9 +399,8 @@ fn run_usage(args: UsageArgs) {
         );
     }
 
-    let partitions: Option<Vec<String>> = partition.map(|p| {
-        p.split(',').map(|s| s.trim().to_string()).collect()
-    });
+    let partitions: Option<Vec<String>> =
+        partition.map(|p| p.split(',').map(|s| s.trim().to_string()).collect());
     let partitions_ref = partitions.as_deref();
 
     GPUUsageReporter::print_usage_report(
@@ -417,9 +416,9 @@ fn run_usage(args: UsageArgs) {
 
 fn run_stat(args: StatArgs) {
     // Parse job IDs if provided
-    let job_ids: Option<Vec<String>> = args.jobs.map(|j| {
-        j.split(',').map(|s| s.trim().to_string()).collect()
-    });
+    let job_ids: Option<Vec<String>> = args
+        .jobs
+        .map(|j| j.split(',').map(|s| s.trim().to_string()).collect());
 
     // Auto-filter to current user unless root or specific user requested
     let current_user = users::get_current_username()
@@ -468,7 +467,9 @@ fn run_stat(args: StatArgs) {
             eprintln!("  Hint: Remove --partition to search all partitions.");
         }
         if job_ids.is_some() {
-            eprintln!("  Hint: Verify job IDs are currently running (sstat requires RUNNING jobs).");
+            eprintln!(
+                "  Hint: Verify job IDs are currently running (sstat requires RUNNING jobs)."
+            );
         }
         return;
     }
@@ -487,9 +488,10 @@ fn run_show_tres() {
 }
 
 fn run_tui(args: TuiArgs) -> Result<()> {
-    let partitions: Option<Vec<String>> = args.partition.as_ref().map(|p| {
-        p.split(',').map(|s| s.trim().to_string()).collect()
-    });
+    let partitions: Option<Vec<String>> = args
+        .partition
+        .as_ref()
+        .map(|p| p.split(',').map(|s| s.trim().to_string()).collect());
 
     // Auto-filter to current user unless root or specific user requested
     let current_user = users::get_current_username()

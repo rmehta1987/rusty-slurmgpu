@@ -3,8 +3,9 @@ use regex::Regex;
 
 static GPU_PATTERN: Lazy<Regex> =
     Lazy::new(|| Regex::new(r"gpu:[^:,]+:\d+\([^)]*\)").expect("GPU_PATTERN regex is valid"));
-static GPU_DETAILS_PATTERN: Lazy<Regex> =
-    Lazy::new(|| Regex::new(r"gpu:([^:,]+):(\d+)\([^)]*\)").expect("GPU_DETAILS_PATTERN regex is valid"));
+static GPU_DETAILS_PATTERN: Lazy<Regex> = Lazy::new(|| {
+    Regex::new(r"gpu:([^:,]+):(\d+)\([^)]*\)").expect("GPU_DETAILS_PATTERN regex is valid")
+});
 
 pub(crate) struct GresParser;
 
@@ -74,14 +75,10 @@ mod tests {
 
     #[test]
     fn test_parse_gres_multiple_gpus() {
-        let result =
-            GresParser::parse_gres_string("gpu:a6000:8(S:0-1),gpu:rtx_2080:2(S:2)");
+        let result = GresParser::parse_gres_string("gpu:a6000:8(S:0-1),gpu:rtx_2080:2(S:2)");
         assert_eq!(
             result,
-            vec![
-                ("a6000".to_string(), 8),
-                ("rtx_2080".to_string(), 2),
-            ]
+            vec![("a6000".to_string(), 8), ("rtx_2080".to_string(), 2),]
         );
     }
 
@@ -111,15 +108,13 @@ mod tests {
 
     #[test]
     fn test_parse_gres_complex_name() {
-        let result =
-            GresParser::parse_gres_string("gpu:nvidia_a100-sxm4-80gb:4(S:0-1)");
+        let result = GresParser::parse_gres_string("gpu:nvidia_a100-sxm4-80gb:4(S:0-1)");
         assert_eq!(result, vec![("nvidia_a100-sxm4-80gb".to_string(), 4)]);
     }
 
     #[test]
     fn test_parse_gres_mig_slice() {
-        let result =
-            GresParser::parse_gres_string("gpu:h200_1g.18gb:2(S:0)");
+        let result = GresParser::parse_gres_string("gpu:h200_1g.18gb:2(S:0)");
         assert_eq!(result, vec![("h200_1g.18gb".to_string(), 2)]);
     }
 }

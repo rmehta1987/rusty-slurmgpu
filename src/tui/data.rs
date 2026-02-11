@@ -69,8 +69,14 @@ pub fn fetch_report_async(
 
         let result = try_fetch_report(&options);
         let data = match result {
-            Ok(metrics) => ReportData { metrics, error: None },
-            Err(e) => ReportData { metrics: Vec::new(), error: Some(e) },
+            Ok(metrics) => ReportData {
+                metrics,
+                error: None,
+            },
+            Err(e) => ReportData {
+                metrics: Vec::new(),
+                error: Some(e),
+            },
         };
         let _ = tx.send(DataMessage::ReportReady(data));
     });
@@ -90,8 +96,8 @@ fn try_fetch_report(options: &ReportOptions) -> Result<Vec<GPUMetrics>, String> 
     )
     .map_err(|e| format!("{}", e))?;
 
-    let all_jobs = SlurmJobParser::parse_string(&sacct_output)
-        .map_err(|e| format!("Parse error: {}", e))?;
+    let all_jobs =
+        SlurmJobParser::parse_string(&sacct_output).map_err(|e| format!("Parse error: {}", e))?;
 
     if all_jobs.is_empty() {
         return Ok(Vec::new());
@@ -102,10 +108,7 @@ fn try_fetch_report(options: &ReportOptions) -> Result<Vec<GPUMetrics>, String> 
     Ok(metrics)
 }
 
-pub fn fetch_usage_async(
-    tx: mpsc::Sender<DataMessage>,
-    partitions: Option<Vec<String>>,
-) {
+pub fn fetch_usage_async(tx: mpsc::Sender<DataMessage>, partitions: Option<Vec<String>>) {
     thread::spawn(move || {
         let result = try_fetch_usage(partitions.as_deref());
         let data = match result {
@@ -165,25 +168,21 @@ pub fn fetch_stat_async(
     thread::spawn(move || {
         let result = try_fetch_stat(user.as_deref(), partition.as_deref());
         let data = match result {
-            Ok(metrics) => StatData { metrics, error: None },
-            Err(e) => StatData { metrics: Vec::new(), error: Some(e) },
+            Ok(metrics) => StatData {
+                metrics,
+                error: None,
+            },
+            Err(e) => StatData {
+                metrics: Vec::new(),
+                error: Some(e),
+            },
         };
         let _ = tx.send(DataMessage::StatReady(data));
     });
 }
 
-fn try_fetch_stat(
-    user: Option<&str>,
-    partition: Option<&str>,
-) -> Result<Vec<GPUMetrics>, String> {
+fn try_fetch_stat(user: Option<&str>, partition: Option<&str>) -> Result<Vec<GPUMetrics>, String> {
     let node_gpu_map = build_node_gpu_mapping(false);
-    let metrics = SstatMonitor::monitor_jobs(
-        user,
-        partition,
-        None,
-        100,
-        &node_gpu_map,
-        false,
-    );
+    let metrics = SstatMonitor::monitor_jobs(user, partition, None, 100, &node_gpu_map, false);
     Ok(metrics)
 }

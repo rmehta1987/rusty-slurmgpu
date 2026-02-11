@@ -33,11 +33,7 @@ pub fn render_usage_tab(
         return;
     }
 
-    let chunks = Layout::vertical([
-        Constraint::Min(10),
-        Constraint::Length(5),
-    ])
-    .split(area);
+    let chunks = Layout::vertical([Constraint::Min(10), Constraint::Length(5)]).split(area);
 
     render_resource_table(f, chunks[0], gpu_summaries, cpu_summary);
     render_queue_summary(f, chunks[1], queue_summary);
@@ -49,15 +45,22 @@ fn render_resource_table(
     gpu_summaries: &[GPUTypeSummary],
     cpu_summary: &CPUTypeSummary,
 ) {
-    let header_cells = ["Resource", "Total", "Used", "Available", "Utilization", "Nodes"]
-        .iter()
-        .map(|h| {
-            Cell::from(*h).style(
-                Style::default()
-                    .fg(Color::White)
-                    .add_modifier(Modifier::BOLD),
-            )
-        });
+    let header_cells = [
+        "Resource",
+        "Total",
+        "Used",
+        "Available",
+        "Utilization",
+        "Nodes",
+    ]
+    .iter()
+    .map(|h| {
+        Cell::from(*h).style(
+            Style::default()
+                .fg(Color::White)
+                .add_modifier(Modifier::BOLD),
+        )
+    });
     let header = Row::new(header_cells).height(1);
 
     let mut rows: Vec<Row> = Vec::new();
@@ -72,8 +75,7 @@ fn render_resource_table(
             Cell::from(summary.total_gpus.to_string()),
             Cell::from(summary.used_gpus.to_string()),
             Cell::from(summary.available_gpus.to_string()),
-            Cell::from(format!("{:.1}%", util))
-                .style(Style::default().fg(util_color)),
+            Cell::from(format!("{:.1}%", util)).style(Style::default().fg(util_color)),
             Cell::from(format!("{}", summary.nodes_with_type.len())),
         ]));
     }
@@ -138,12 +140,12 @@ fn render_resource_table(
     let table = Table::new(
         rows,
         [
-            Constraint::Min(14),   // Resource
-            Constraint::Min(6),    // Total
-            Constraint::Min(6),    // Used
-            Constraint::Min(9),    // Available
-            Constraint::Min(11),   // Utilization
-            Constraint::Min(5),    // Nodes
+            Constraint::Min(14), // Resource
+            Constraint::Min(6),  // Total
+            Constraint::Min(6),  // Used
+            Constraint::Min(9),  // Available
+            Constraint::Min(11), // Utilization
+            Constraint::Min(5),  // Nodes
         ],
     )
     .header(header)

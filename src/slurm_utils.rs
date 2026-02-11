@@ -8,7 +8,8 @@ use crate::errors::GpuReportError;
 use crate::models::{GPUMetrics, SummaryMetrics};
 
 /// Cache for partition time limits (thread-safe, initialized once).
-static PARTITION_TIME_LIMITS_CACHE: OnceLock<HashMap<String, PartitionTimeLimits>> = OnceLock::new();
+static PARTITION_TIME_LIMITS_CACHE: OnceLock<HashMap<String, PartitionTimeLimits>> =
+    OnceLock::new();
 
 #[derive(Debug, Clone)]
 #[allow(dead_code)]
@@ -18,71 +19,69 @@ pub(crate) struct PartitionTimeLimits {
 }
 
 /// Get default and max time limits for all partitions.
-pub(crate) fn get_partition_time_limits(debug: bool) -> &'static HashMap<String, PartitionTimeLimits> {
-    PARTITION_TIME_LIMITS_CACHE
-        .get_or_init(|| {
-            let mut partition_limits = HashMap::new();
+pub(crate) fn get_partition_time_limits(
+    debug: bool,
+) -> &'static HashMap<String, PartitionTimeLimits> {
+    PARTITION_TIME_LIMITS_CACHE.get_or_init(|| {
+        let mut partition_limits = HashMap::new();
 
-            let mut cmd = Command::new("scontrol");
-            cmd.args(["show", "partition", "--json"]);
-            match run_with_timeout(cmd, SLURM_COMMAND_TIMEOUT)
-            {
-                Ok(output) if output.status.success() => {
-                    let stdout = String::from_utf8_lossy(&output.stdout);
-                    if let Ok(data) = serde_json::from_str::<serde_json::Value>(&stdout) {
-                        if let Some(partitions) =
-                            data.get("partitions").and_then(|v| v.as_array())
-                        {
-                            for partition in partitions {
-                                let name = partition
-                                    .get("name")
-                                    .and_then(|v| v.as_str())
-                                    .unwrap_or("")
-                                    .to_string();
+        let mut cmd = Command::new("scontrol");
+        cmd.args(["show", "partition", "--json"]);
+        match run_with_timeout(cmd, SLURM_COMMAND_TIMEOUT) {
+            Ok(output) if output.status.success() => {
+                let stdout = String::from_utf8_lossy(&output.stdout);
+                if let Ok(data) = serde_json::from_str::<serde_json::Value>(&stdout) {
+                    if let Some(partitions) = data.get("partitions").and_then(|v| v.as_array()) {
+                        for partition in partitions {
+                            let name = partition
+                                .get("name")
+                                .and_then(|v| v.as_str())
+                                .unwrap_or("")
+                                .to_string();
 
-                                let default_minutes = partition
-                                    .get("default_time")
-                                    .and_then(|v| v.get("number"))
-                                    .and_then(|v| v.as_i64());
+                            let default_minutes = partition
+                                .get("default_time")
+                                .and_then(|v| v.get("number"))
+                                .and_then(|v| v.as_i64());
 
-                                let max_minutes = partition
-                                    .get("max_time")
-                                    .and_then(|v| v.get("number"))
-                                    .and_then(|v| v.as_i64());
+                            let max_minutes = partition
+                                .get("max_time")
+                                .and_then(|v| v.get("number"))
+                                .and_then(|v| v.as_i64());
 
-                                if debug && default_minutes.is_some() {
-                                    eprintln!(
-                                        "Debug: Partition {} - Default: {:?} min, Max: {:?} min",
-                                        name, default_minutes, max_minutes
-                                    );
-                                }
-
-                                partition_limits.insert(
-                                    name,
-                                    PartitionTimeLimits {
-                                        default_minutes,
-                                        max_minutes,
-                                    },
+                            if debug && default_minutes.is_some() {
+                                eprintln!(
+                                    "Debug: Partition {} - Default: {:?} min, Max: {:?} min",
+                                    name, default_minutes, max_minutes
                                 );
                             }
+
+                            partition_limits.insert(
+                                name,
+                                PartitionTimeLimits {
+                                    default_minutes,
+                                    max_minutes,
+                                },
+                            );
                         }
                     }
                 }
-                Ok(output) => {
-                    if debug {
-                        let stderr = String::from_utf8_lossy(&output.stderr);
-                        eprintln!("Warning: scontrol partition failed: {}", stderr);
-                    }
-                }
-                Err(e) => {
-                    if debug {
-                        eprintln!("Warning: Failed to run scontrol: {}", e);
-                    }
+            }
+            Ok(output) => {
+                if debug {
+                    let stderr = String::from_utf8_lossy(&output.stderr);
+                    eprintln!("Warning: scontrol partition failed: {}", stderr);
                 }
             }
+            Err(e) => {
+                if debug {
+                    eprintln!("Warning: Failed to run scontrol: {}", e);
+                }
+            }
+        }
 
-            partition_limits
-        })
+        partition_limits
+    })
 }
 
 /// Build a mapping of node names to GPU types using scontrol.
@@ -91,8 +90,7 @@ pub fn build_node_gpu_mapping(debug: bool) -> HashMap<String, String> {
 
     let mut cmd = Command::new("scontrol");
     cmd.args(["show", "node", "--json"]);
-    match run_with_timeout(cmd, SLURM_COMMAND_TIMEOUT)
-    {
+    match run_with_timeout(cmd, SLURM_COMMAND_TIMEOUT) {
         Ok(output) if output.status.success() => {
             let stdout = String::from_utf8_lossy(&output.stdout);
             if let Ok(data) = serde_json::from_str::<serde_json::Value>(&stdout) {
@@ -103,18 +101,14 @@ pub fn build_node_gpu_mapping(debug: bool) -> HashMap<String, String> {
                             .and_then(|v| v.as_str())
                             .unwrap_or("")
                             .to_string();
-                        let gres = node
-                            .get("gres")
-                            .and_then(|v| v.as_str())
-                            .unwrap_or("");
+                        let gres = node.get("gres").and_then(|v| v.as_str()).unwrap_or("");
 
                         if !gres.is_empty() && gres.contains("gpu:") {
                             let parts: Vec<&str> = gres.split(':').collect();
                             if parts.len() >= 3 {
                                 let gpu_type = parts[1];
                                 if !gpu_type.is_empty() && gpu_type != "gpu" {
-                                    node_gpu_map
-                                        .insert(node_name.clone(), gpu_type.to_string());
+                                    node_gpu_map.insert(node_name.clone(), gpu_type.to_string());
                                     if debug && node_gpu_map.len() <= 5 {
                                         eprintln!(
                                             "Debug: Node {} has GPU type: {} (from GRES: {})",
@@ -206,9 +200,7 @@ pub(crate) fn run_sacct(
                 .as_ref()
                 .is_some_and(|s| s.contains('T') || s.contains(':'))
             {
-                chrono::Local::now()
-                    .format("%Y-%m-%dT%H:%M:%S")
-                    .to_string()
+                chrono::Local::now().format("%Y-%m-%dT%H:%M:%S").to_string()
             } else {
                 chrono::Local::now().format("%Y-%m-%d").to_string()
             };
@@ -243,9 +235,7 @@ pub(crate) fn run_sacct(
     let mut cmd = Command::new(&cmd_args[0]);
     cmd.args(&cmd_args[1..]);
     let output = run_with_timeout(cmd, SLURM_COMMAND_TIMEOUT)
-        .map_err(|e| {
-            GpuReportError::slurm_command("sacct", -1, &e.to_string(), "")
-        })?;
+        .map_err(|e| GpuReportError::slurm_command("sacct", -1, &e.to_string(), ""))?;
 
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
@@ -280,9 +270,7 @@ fn resolve_time_keyword(time_str: &str) -> String {
             .format("%Y-%m-%d")
             .to_string(),
         "today" => chrono::Local::now().format("%Y-%m-%d").to_string(),
-        "now" => chrono::Local::now()
-            .format("%Y-%m-%dT%H:%M:%S")
-            .to_string(),
+        "now" => chrono::Local::now().format("%Y-%m-%dT%H:%M:%S").to_string(),
         _ => time_str.to_string(),
     }
 }

@@ -63,8 +63,18 @@ pub fn render_stat_tab(
         .collect();
 
     let header_cells = [
-        "User", "JobID", "State", "Elapsed", "CPUEff", "MemEff",
-        "GPUEff", "GPUUtil", "GPUMemEff", "GPUMem", "Node", "GPUType",
+        "User",
+        "JobID",
+        "State",
+        "Elapsed",
+        "CPUEff",
+        "MemEff",
+        "GPUEff",
+        "GPUUtil",
+        "GPUMemEff",
+        "GPUMem",
+        "Node",
+        "GPUType",
     ]
     .iter()
     .map(|h| {
@@ -104,18 +114,18 @@ pub fn render_stat_tab(
     let table = Table::new(
         rows,
         [
-            Constraint::Min(8),   // User
-            Constraint::Min(8),   // JobID
-            Constraint::Min(9),   // State
-            Constraint::Min(8),   // Elapsed
-            Constraint::Min(6),   // CPUEff
-            Constraint::Min(6),   // MemEff
-            Constraint::Min(6),   // GPUEff
-            Constraint::Min(7),   // GPUUtil
-            Constraint::Min(7),   // GPUMemEff
-            Constraint::Min(6),   // GPUMem
-            Constraint::Min(8),   // Node
-            Constraint::Min(8),   // GPUType
+            Constraint::Min(8), // User
+            Constraint::Min(8), // JobID
+            Constraint::Min(9), // State
+            Constraint::Min(8), // Elapsed
+            Constraint::Min(6), // CPUEff
+            Constraint::Min(6), // MemEff
+            Constraint::Min(6), // GPUEff
+            Constraint::Min(7), // GPUUtil
+            Constraint::Min(7), // GPUMemEff
+            Constraint::Min(6), // GPUMem
+            Constraint::Min(8), // Node
+            Constraint::Min(8), // GPUType
         ],
     )
     .header(header)

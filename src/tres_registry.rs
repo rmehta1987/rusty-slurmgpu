@@ -40,8 +40,7 @@ impl TresRegistry {
 
         let mut cmd = Command::new("sacctmgr");
         cmd.args(["show", "tres", "--json"]);
-        match run_with_timeout(cmd, SLURM_COMMAND_TIMEOUT)
-        {
+        match run_with_timeout(cmd, SLURM_COMMAND_TIMEOUT) {
             Ok(output) if output.status.success() => {
                 let stdout = String::from_utf8_lossy(&output.stdout);
                 match serde_json::from_str::<serde_json::Value>(&stdout) {
@@ -58,15 +57,12 @@ impl TresRegistry {
                                     .and_then(|v| v.as_str())
                                     .unwrap_or("")
                                     .to_string();
-                                let tres_id = tres
-                                    .get("id")
-                                    .and_then(|v| v.as_i64())
-                                    .map(|v| v as i32);
+                                let tres_id =
+                                    tres.get("id").and_then(|v| v.as_i64()).map(|v| v as i32);
 
                                 if !tres_type.is_empty() {
                                     if let Some(id) = tres_id {
-                                        self.tres_map
-                                            .insert((tres_type, tres_name), id);
+                                        self.tres_map.insert((tres_type, tres_name), id);
                                     }
                                 }
                             }
@@ -116,7 +112,9 @@ pub struct TresRegistryRef;
 
 impl TresRegistryRef {
     pub fn get_tres_id(&self, tres_type: &str, tres_name: &str) -> Option<i32> {
-        let mut registry = REGISTRY.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+        let mut registry = REGISTRY
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
         registry.ensure_loaded();
         registry
             .tres_map
@@ -135,7 +133,9 @@ impl TresRegistryRef {
     }
 
     pub fn debug_print_tres_map(&self) {
-        let mut registry = REGISTRY.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+        let mut registry = REGISTRY
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
         registry.ensure_loaded();
 
         println!("TRES Registry Contents:");
