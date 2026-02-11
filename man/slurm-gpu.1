@@ -1,0 +1,362 @@
+.TH SLURM-GPU 1 "February 2026" "slurm-gpu 0.1.0" "Slurm GPU Utilities"
+.SH NAME
+slurm-gpu \- GPU utilization reporting for Slurm clusters
+.SH SYNOPSIS
+.B slurm-gpu
+.I command
+.RI [ options ]
+.PP
+.B slurm-report
+.RI [ options ]
+.br
+.B slurm-usage
+.RI [ options ]
+.br
+.B slurm-stat
+.RI [ options ]
+.br
+.B slurm-show-tres
+.br
+.B slurm-tui
+.RI [ options ]
+.SH DESCRIPTION
+.B slurm-gpu
+queries sacct, scontrol, and squeue to produce per-job GPU and CPU
+efficiency reports, cluster-wide GPU usage summaries, and real-time job
+monitoring via sstat.
+.PP
+Each subcommand is also available as a standalone symlink
+(e.g.,
+.B slurm-report
+is equivalent to
+.B slurm-gpu report\fR).
+Running
+.B slurm-gpu
+with no subcommand defaults to
+.BR usage .
+.SH COMMANDS
+.SS report
+Generate GPU utilization reports by querying sacct.
+Shows per-job efficiency metrics including CPU, memory, GPU utilization,
+and GPU memory usage.
+When no user or time range is specified, defaults to all users from
+the last 24 hours.
+.TP
+.BR \-S ", " \-\-starttime " " \fITIME\fR
+Start time for sacct query (e.g., 2025-07-24, yesterday, today).
+.TP
+.BR \-E ", " \-\-endtime " " \fITIME\fR
+End time for sacct query (e.g., 2025-07-24, today, now).
+.TP
+.BR \-r ", " \-\-partition " " \fINAME\fR
+Filter by Slurm partition.
+.TP
+.BR \-A ", " \-\-account " " \fINAME\fR
+Filter by Slurm account (comma-separated list).
+.TP
+.BR \-u ", " \-\-user " " \fINAME\fR
+Filter to a specific user.
+.TP
+.BR \-a ", " \-\-allusers
+Query all users (default when no user specified).
+.TP
+.BR \-j ", " \-\-jobs " " \fIJOBIDS\fR
+Comma-separated list of specific job IDs to query.
+.TP
+.BR \-g ", " \-\-gpu
+Only show jobs that request GPU resources.
+.TP
+.B \-\-gpu\-idle
+Only show jobs with GPU utilization < 50% or GPU memory efficiency < 50%.
+.TP
+.B \-\-summary
+Generate summary report grouped by user.
+.TP
+.B \-\-summary\-by\-partition
+Generate summary report grouped by user and partition.
+.TP
+.B \-\-summary\-by\-account
+Generate summary report grouped by user and account.
+.TP
+.B \-\-detailed
+Include node and GPU type columns.
+.TP
+.B \-\-plain
+Use plain text output instead of rich formatting.
+.TP
+.BR \-o ", " \-\-output " " \fIFILE\fR
+Write output to file instead of stdout.
+.TP
+.BR \-\-filter\-state " " \fISTATE\fR
+Filter jobs by state: all, completed, failed, pending, running (default: all).
+.TP
+.BR \-\-min\-gpu\-eff " " \fIVALUE\fR
+Only show jobs with GPU efficiency >= this percentage.
+.TP
+.BR \-\-max\-jobs " " \fIN\fR
+Maximum number of jobs to display.
+.TP
+.BR \-\-sort\-by " " \fIFIELD\fR
+Sort by: user, job_id, state, elapsed, gpu_eff, gpu_mem_eff, time_eff,
+cpu_eff, mem_eff (default: job_id).
+.TP
+.B \-\-reverse
+Reverse sort order.
+.TP
+.B \-\-telegraf
+Output weighted averages in InfluxDB line protocol format for Telegraf.
+Use with \fB\-u\fR for a single user or \fB\-a\fR for one line per user.
+Computes time-weighted averages (weighted by job elapsed time) for completed
+and timed-out jobs. Ignored with \fB\-\-summary\fR flags.
+.TP
+.B \-\-debug
+Enable debug output to stderr.
+.\"
+.SS usage
+Show current GPU and CPU usage across the cluster, grouped by GPU type.
+.TP
+.BR \-r ", " \-\-partition " " \fINAME\fR
+Show only nodes in the specified partition(s). Comma-separated list.
+.TP
+.B \-k
+Shortcut for \fB\-\-partition h200ea,education,gpu\-common,scavenger\-gpu\fR.
+.TP
+.BR \-u ", " \-\-user " " \fINAME\fR
+Show GPU usage for a specific user.
+.TP
+.BR \-a ", " \-\-all
+Show GPU usage breakdown by all users.
+.TP
+.B \-\-detailed
+Show detailed report with individual node names.
+.TP
+.B \-\-plain
+Use plain text output instead of rich formatting.
+.TP
+.B \-\-telegraf
+Output in InfluxDB line protocol format for Telegraf.
+.TP
+.B \-\-debug
+Enable debug output to stderr.
+.\"
+.SS stat
+Monitor running and pending jobs with real-time GPU and CPU statistics
+using sstat. Automatically filters to the current user unless run as root
+or a specific user is given.
+.TP
+.BR \-u ", " \-\-user " " \fINAME\fR
+Filter to a specific user.
+.TP
+.BR \-r ", " \-\-partition " " \fINAME\fR
+Filter by Slurm partition.
+.TP
+.BR \-j ", " \-\-jobs " " \fIJOBIDS\fR
+Comma-separated list of specific job IDs to query.
+.TP
+.BR \-\-max\-jobs " " \fIN\fR
+Maximum number of jobs to display. 0 = unlimited (default: 100).
+.TP
+.BR \-\-sort\-by " " \fIFIELD\fR
+Sort by: user, job_id, elapsed, gpu_eff, gpu_mem_eff, time_eff,
+cpu_eff, mem_eff (default: job_id).
+.TP
+.B \-\-reverse
+Reverse sort order.
+.TP
+.B \-\-detailed
+Include node and GPU type columns.
+.TP
+.B \-\-plain
+Use plain text output instead of rich formatting.
+.TP
+.B \-\-debug
+Enable debug output to stderr.
+.\"
+.SS show\-tres
+Display the dynamic TRES (Trackable RESource) ID mappings for this cluster.
+Shows how Slurm maps GPU types and other resources to numeric TRES IDs.
+Takes no options.
+.\"
+.SS tui
+Launch an interactive terminal dashboard with three tabs:
+Report (sacct history), Usage (cluster GPU/CPU overview), and
+My Jobs (sstat live monitoring).
+.TP
+.BR \-r ", " \-\-partition " " \fINAME\fR
+Filter by Slurm partition.
+.TP
+.BR \-u ", " \-\-user " " \fINAME\fR
+Filter to a specific user.
+.TP
+.BR \-S ", " \-\-starttime " " \fITIME\fR
+Start time for the report tab (e.g., yesterday, today).
+.TP
+.BR \-\-refresh " " \fISECONDS\fR
+Auto-refresh interval in seconds (default: 30).
+.PP
+.B TUI Key Bindings:
+.TP
+.B q
+Quit.
+.TP
+.B 1 / 2 / 3
+Switch tab (Report / Usage / My Jobs).
+.TP
+.B Tab / Shift+Tab
+Next / previous tab.
+.TP
+.B r
+Manual refresh (resets countdown).
+.TP
+.B p
+Pause / resume auto-refresh.
+.TP
+.B s
+Cycle state filter (all / RUNNING / PENDING / ...).
+.TP
+.B + / \-
+Increase / decrease refresh interval (5s steps).
+.TP
+.B /
+Focus search input.
+.TP
+.B Esc
+Clear search / unfocus.
+.TP
+.B ?
+Toggle help popup.
+.TP
+.B Up / Down
+Navigate table rows.
+.TP
+.B Home / End
+Jump to first / last row.
+.\"
+.SS completions
+Generate shell completion scripts for bash, zsh, fish, elvish, or powershell.
+.TP
+.I SHELL
+The target shell (required). One of: bash, zsh, fish, elvish, powershell.
+.PP
+Example:
+.RS
+.nf
+slurm-gpu completions bash > /etc/bash_completion.d/slurm-gpu
+slurm-gpu completions zsh > "${fpath[1]}/_slurm-gpu"
+slurm-gpu completions fish > ~/.config/fish/completions/slurm-gpu.fish
+.fi
+.RE
+.SH EFFICIENCY METRICS
+.TP
+.B TimeEff
+Elapsed time / requested time limit.
+.TP
+.B CPUEff
+Total CPU time used / (elapsed time * allocated CPUs).
+.TP
+.B MemEff
+Maximum RSS / requested memory.
+.TP
+.B GPUEff
+Average GPU utilization percentage reported by the GPU driver.
+.TP
+.B GPUUtil
+Raw GPU utilization (can exceed 100% for multi-GPU jobs, shown as sum).
+.TP
+.B GPUMemEff
+Average GPU memory used / total GPU memory allocated.
+.TP
+.B GPUMem
+Absolute GPU memory used.
+.SH ENVIRONMENT
+.TP
+.B SLURM_GPU_K_PARTITIONS
+Override the
+.B \-k
+partition shortcut. Comma-separated list of partition names
+(default: h200ea,education,gpu-common,scavenger-gpu).
+.PP
+.B slurm-gpu
+requires a working Slurm installation with
+.BR sacct (1),
+.BR scontrol (1),
+.BR squeue (1),
+and
+.BR sstat (1)
+available in the PATH.
+.SH FILES
+.TP
+.I ~/.local/bin/slurm-gpu
+Default installation location.
+.SH EXAMPLES
+Show all GPU jobs from the last 24 hours:
+.PP
+.RS
+.nf
+slurm-report -g
+.fi
+.RE
+.PP
+Show GPU-idle jobs (underutilizing GPUs) for a specific user:
+.PP
+.RS
+.nf
+slurm-report -u jsmith --gpu-idle
+.fi
+.RE
+.PP
+Summary of GPU efficiency by user and partition since yesterday:
+.PP
+.RS
+.nf
+slurm-report -a -S yesterday --summary-by-partition -g
+.fi
+.RE
+.PP
+Current cluster GPU usage:
+.PP
+.RS
+.nf
+slurm-usage
+.fi
+.RE
+.PP
+GPU usage by user on a specific partition:
+.PP
+.RS
+.nf
+slurm-usage -a -r gpu-common
+.fi
+.RE
+.PP
+Monitor your running jobs:
+.PP
+.RS
+.nf
+slurm-stat
+.fi
+.RE
+.PP
+Launch the interactive dashboard:
+.PP
+.RS
+.nf
+slurm-tui
+.fi
+.RE
+.PP
+Output for Telegraf/InfluxDB ingestion:
+.PP
+.RS
+.nf
+slurm-report -a --telegraf
+slurm-usage --telegraf
+.fi
+.RE
+.SH AUTHORS
+Joe Shamblin <wjs@cs.duke.edu>
+.SH SEE ALSO
+.BR sacct (1),
+.BR scontrol (1),
+.BR squeue (1),
+.BR sstat (1)

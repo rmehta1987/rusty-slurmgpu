@@ -18,14 +18,21 @@ cargo build --release
 
 ## Installation
 
-Copy the binary and create symlink shortcuts:
+Use the included install script to copy the binary, create symlinks, and install the man page:
+
+```bash
+cargo build --release
+./install.sh              # installs to ~/.local/bin (default)
+./install.sh /usr/local   # or specify a custom prefix
+```
+
+Or install manually:
 
 ```bash
 install -m 755 target/release/slurm-gpu /usr/local/bin/
-ln -sf slurm-gpu /usr/local/bin/slurm-report
-ln -sf slurm-gpu /usr/local/bin/slurm-usage
-ln -sf slurm-gpu /usr/local/bin/slurm-stat
-ln -sf slurm-gpu /usr/local/bin/slurm-show-tres
+for cmd in slurm-report slurm-usage slurm-stat slurm-show-tres slurm-tui; do
+    ln -sf slurm-gpu /usr/local/bin/$cmd
+done
 ```
 
 Symlinks invoke the corresponding subcommand automatically — `slurm-report` behaves exactly like `slurm-gpu report`.
@@ -38,6 +45,10 @@ Symlinks invoke the corresponding subcommand automatically — `slurm-report` be
 | `slurm-gpu usage` | `slurm-usage` | Current GPU availability by type across the cluster |
 | `slurm-gpu stat` | `slurm-stat` | Real-time monitoring of running jobs via sstat |
 | `slurm-gpu show-tres` | `slurm-show-tres` | Display dynamic TRES ID mappings |
+| `slurm-gpu tui` | `slurm-tui` | Interactive terminal dashboard |
+| `slurm-gpu completions` | — | Generate shell completion scripts |
+
+Running `slurm-gpu` with no subcommand defaults to `usage`.
 
 ## Usage
 
@@ -189,6 +200,44 @@ slurm-show-tres
 
 Displays the dynamic TRES (Trackable Resource) ID-to-name mappings configured on the cluster.
 
+### tui — Interactive Dashboard
+
+```bash
+# Launch with defaults (auto-filtered to current user)
+slurm-tui
+
+# Specific user and partition
+slurm-tui -u username -r compsci-gpu
+
+# Custom start time and refresh interval
+slurm-tui -S yesterday --refresh 60
+```
+
+Three-tab dashboard built with ratatui:
+
+| Tab | Content |
+|-----|---------|
+| Report | sacct job history with efficiency metrics |
+| Usage | Cluster-wide GPU/CPU overview |
+| My Jobs | Live sstat monitoring of running jobs |
+
+**Key bindings:**
+
+| Key | Action |
+|-----|--------|
+| `q` | Quit |
+| `1` / `2` / `3` | Switch tab (Report / Usage / My Jobs) |
+| `Tab` / `Shift+Tab` | Next / previous tab |
+| `r` | Manual refresh |
+| `p` | Pause / resume auto-refresh |
+| `s` | Cycle state filter |
+| `+` / `-` | Increase / decrease refresh interval (5s steps) |
+| `/` | Focus search input |
+| `Esc` | Clear search / unfocus |
+| `?` | Toggle help popup |
+| `Up` / `Down` | Navigate table rows |
+| `Home` / `End` | Jump to first / last row |
+
 ## Report Columns
 
 ### Job Reports
@@ -238,12 +287,14 @@ src/
 ├── lib.rs               # Public module declarations
 ├── cli_helpers.rs       # Report option structs, job fetching, filtering, output routing
 ├── reporter.rs          # Table formatting (rich + plain + telegraf)
+├── table_helpers.rs     # Shared table construction utilities (comfy-table)
 ├── calculator.rs        # Efficiency calculations, time-weighted averages
 ├── models.rs            # Data models (GPUMetrics, SummaryMetrics, SlurmJob, etc.)
 ├── parser.rs            # sacct JSON output parsing
 ├── validation.rs        # Input validation and security
 ├── constants.rs         # Configuration constants and thresholds
 ├── errors.rs            # Custom error types
+├── command_ext.rs       # Command timeout and execution helpers
 ├── slurm_utils.rs       # Shared Slurm command utilities
 ├── gpu_usage.rs         # GPU usage reporting facade
 ├── gres_parser.rs       # GRES string parsing
@@ -254,7 +305,16 @@ src/
 ├── queued_jobs.rs       # Pending job queue analysis
 ├── sstat.rs             # Real-time job monitoring via sstat
 ├── tres_parser.rs       # TRES string parsing
-└── tres_registry.rs     # Dynamic TRES ID registry
+├── tres_registry.rs     # Dynamic TRES ID registry
+└── tui/
+    ├── mod.rs           # TUI module root, TuiConfig
+    ├── app.rs           # Application loop, terminal setup, rendering
+    ├── data.rs          # Background data fetching threads
+    ├── input.rs         # Text input field widget
+    ├── widgets.rs       # Shared TUI widgets (efficiency colors, help popup)
+    ├── report_tab.rs    # Report tab rendering
+    ├── usage_tab.rs     # Usage tab rendering
+    └── stat_tab.rs      # My Jobs (sstat) tab rendering
 ```
 
 ## Development
@@ -272,7 +332,29 @@ cargo check
 # Run directly
 cargo run -- report -u username -S yesterday
 cargo run -- usage --detailed
+cargo run -- tui -S yesterday
 ```
+
+## Shell Completions
+
+Generate and install completion scripts for your shell:
+
+```bash
+# Bash
+slurm-gpu completions bash > /etc/bash_completion.d/slurm-gpu
+
+# Zsh
+slurm-gpu completions zsh > "${fpath[1]}/_slurm-gpu"
+
+# Fish
+slurm-gpu completions fish > ~/.config/fish/completions/slurm-gpu.fish
+```
+
+## Environment Variables
+
+| Variable | Description |
+|----------|-------------|
+| `SLURM_GPU_K_PARTITIONS` | Override the `-k` partition shortcut (comma-separated list) |
 
 ## License
 
