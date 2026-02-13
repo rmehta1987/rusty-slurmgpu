@@ -219,7 +219,17 @@ impl App {
                     return m.user.to_lowercase().contains(&s)
                         || m.job_id.to_string().contains(&s)
                         || m.state.contains_search(&s)
-                        || m.partition.to_lowercase().contains(&s);
+                        || m.partition.to_lowercase().contains(&s)
+                        || m.node
+                            .as_deref()
+                            .unwrap_or("")
+                            .to_lowercase()
+                            .contains(&s)
+                        || m.gpu_type
+                            .as_deref()
+                            .unwrap_or("")
+                            .to_lowercase()
+                            .contains(&s);
                 }
                 true
             })
@@ -238,7 +248,17 @@ impl App {
                 if !s.is_empty() {
                     return m.user.to_lowercase().contains(&s)
                         || m.job_id.to_string().contains(&s)
-                        || m.partition.to_lowercase().contains(&s);
+                        || m.partition.to_lowercase().contains(&s)
+                        || m.node
+                            .as_deref()
+                            .unwrap_or("")
+                            .to_lowercase()
+                            .contains(&s)
+                        || m.gpu_type
+                            .as_deref()
+                            .unwrap_or("")
+                            .to_lowercase()
+                            .contains(&s);
                 }
                 true
             })
