@@ -3,8 +3,11 @@ use std::process::{Command, Output, Stdio};
 use std::sync::mpsc;
 use std::time::Duration;
 
-/// Default timeout for Slurm commands (30 seconds).
+/// Default timeout for fast Slurm commands like scontrol/squeue (30 seconds).
 pub(crate) const SLURM_COMMAND_TIMEOUT: Duration = Duration::from_secs(30);
+
+/// Timeout for sacct queries, which can be slow over large time ranges (5 minutes).
+pub(crate) const SACCT_TIMEOUT: Duration = Duration::from_secs(300);
 
 /// Run a command with a timeout, returning an error if it takes too long.
 ///

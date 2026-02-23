@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::process::Command;
 use std::sync::OnceLock;
 
-use crate::command_ext::{run_with_timeout, SLURM_COMMAND_TIMEOUT};
+use crate::command_ext::{run_with_timeout, SACCT_TIMEOUT, SLURM_COMMAND_TIMEOUT};
 use crate::constants::{SECONDS_PER_HOUR, SECONDS_PER_MINUTE};
 use crate::errors::GpuReportError;
 use crate::models::{GPUMetrics, SummaryMetrics};
@@ -234,7 +234,7 @@ pub(crate) fn run_sacct(
 
     let mut cmd = Command::new(&cmd_args[0]);
     cmd.args(&cmd_args[1..]);
-    let output = run_with_timeout(cmd, SLURM_COMMAND_TIMEOUT)
+    let output = run_with_timeout(cmd, SACCT_TIMEOUT)
         .map_err(|e| GpuReportError::slurm_command("sacct", -1, &e.to_string(), ""))?;
 
     if !output.status.success() {
