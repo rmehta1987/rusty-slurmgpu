@@ -121,7 +121,6 @@ pub fn build_node_gpu_mapping(debug: bool) -> HashMap<String, String> {
                     }
                 }
             }
-
             if debug {
                 eprintln!(
                     "Debug: Built mapping for {} nodes with GPUs",

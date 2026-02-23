@@ -24,6 +24,10 @@ users = "0.11"
 ratatui = "0.29"
 crossterm = "0.28"
 
+[lints.clippy]
+# collapsible_if requires let-chains (stable in Rust 1.88+); suppress until toolchain is updated
+collapsible_if = "allow"
+
 [dev-dependencies]
 assert_cmd = "2"
 predicates = "3"
