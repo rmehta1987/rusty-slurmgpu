@@ -328,8 +328,20 @@ pub fn generate_and_output_report(metrics: &[GPUMetrics], options: &ReportOption
             return Ok(());
         }
 
-        if options.allusers {
-            // Group metrics by user, output one line per user
+        if let Some(ref explicit_user) = options.user {
+            // Single explicit user (-u): one aggregate line for that user's jobs.
+            let terminal_owned: Vec<GPUMetrics> = terminal.iter().map(|m| (*m).clone()).collect();
+            let line = GPUReporter::format_telegraf_weighted_avg(
+                &terminal_owned,
+                explicit_user,
+                options.partition_filter.as_deref(),
+                options.account_filter.as_deref(),
+            );
+            if !line.is_empty() {
+                println!("{}", line);
+            }
+        } else {
+            // No explicit user (-a or default all-users fetch): one line per user.
             let mut by_user: HashMap<String, Vec<&GPUMetrics>> = HashMap::new();
             for m in terminal {
                 by_user.entry(m.user.clone()).or_default().push(m);
@@ -348,22 +360,6 @@ pub fn generate_and_output_report(metrics: &[GPUMetrics], options: &ReportOption
                 if !line.is_empty() {
                     println!("{}", line);
                 }
-            }
-        } else {
-            let terminal_owned: Vec<GPUMetrics> = terminal.iter().map(|m| (*m).clone()).collect();
-            let user = options
-                .user
-                .as_deref()
-                .or_else(|| terminal_owned.first().map(|m| m.user.as_str()))
-                .unwrap_or("unknown");
-            let line = GPUReporter::format_telegraf_weighted_avg(
-                &terminal_owned,
-                user,
-                options.partition_filter.as_deref(),
-                options.account_filter.as_deref(),
-            );
-            if !line.is_empty() {
-                println!("{}", line);
             }
         }
         return Ok(());
