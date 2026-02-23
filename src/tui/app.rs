@@ -349,7 +349,7 @@ impl App {
 // Redirect stderr to /dev/null so background thread eprintln! calls
 // don't corrupt the alternate screen buffer.
 fn suppress_stderr() -> Option<i32> {
-    extern "C" {
+    unsafe extern "C" {
         fn dup(fd: i32) -> i32;
         fn dup2(oldfd: i32, newfd: i32) -> i32;
     }
@@ -364,7 +364,7 @@ fn suppress_stderr() -> Option<i32> {
 }
 
 fn restore_stderr(saved_fd: i32) {
-    extern "C" {
+    unsafe extern "C" {
         fn dup2(oldfd: i32, newfd: i32) -> i32;
         fn close(fd: i32) -> i32;
     }
