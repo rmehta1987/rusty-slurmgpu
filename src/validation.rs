@@ -90,12 +90,13 @@ impl InputValidator {
         use chrono::NaiveDate;
         use chrono::NaiveDateTime;
 
-        // YYYY-MM-DDTHH:MM:SS
-        if let Ok(dt) = NaiveDateTime::parse_from_str(&lower, "%Y-%m-%dT%H:%M:%S") {
+        // YYYY-MM-DDTHH:MM:SS (literal T separator — parse against original case)
+        if let Ok(dt) = NaiveDateTime::parse_from_str(trimmed, "%Y-%m-%dT%H:%M:%S") {
             return Ok(Some(dt.format("%Y-%m-%dT%H:%M:%S").to_string()));
         }
         // YYYY-MM-DDTHH:MM
-        if let Ok(dt) = NaiveDateTime::parse_from_str(&format!("{}:00", lower), "%Y-%m-%dT%H:%M:%S")
+        if let Ok(dt) =
+            NaiveDateTime::parse_from_str(&format!("{}:00", trimmed), "%Y-%m-%dT%H:%M:%S")
         {
             return Ok(Some(dt.format("%Y-%m-%dT%H:%M:00").to_string()));
         }
@@ -300,7 +301,7 @@ impl SystemValidator {
             return Err(GpuReportError::configuration(
                 "job state",
                 &format!("Invalid job state: '{}'", trimmed),
-                Some("Use one of: CANCELLED, COMPLETED, FAILED, NODE_FAIL, PENDING, PREEMPTED, RUNNING, TIMEOUT"),
+                Some("Use one of: CANCELLED, COMPLETED, FAILED, NODE_FAIL, OUT_OF_MEMORY, PENDING, PREEMPTED, RUNNING, TIMEOUT"),
             ));
         }
 
@@ -369,6 +370,16 @@ mod tests {
     fn test_validate_time_string_date() {
         let result = InputValidator::validate_time_string("2025-07-24").unwrap();
         assert_eq!(result, Some("2025-07-24".to_string()));
+    }
+
+    #[test]
+    fn test_validate_time_string_datetime() {
+        let result = InputValidator::validate_time_string("2026-02-23T13:50:02").unwrap();
+        assert_eq!(result, Some("2026-02-23T13:50:02".to_string()));
+
+        // HH:MM short form
+        let result = InputValidator::validate_time_string("2026-02-23T13:50").unwrap();
+        assert_eq!(result, Some("2026-02-23T13:50:00".to_string()));
     }
 
     #[test]

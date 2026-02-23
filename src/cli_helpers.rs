@@ -192,12 +192,18 @@ pub fn filter_metrics(metrics: Vec<GPUMetrics>, options: &ReportOptions) -> Vec<
 
     // Filter by state
     if options.filter_state != "all" {
-        let target_state = match options.filter_state.as_str() {
+        let lower = options.filter_state.to_lowercase();
+        let target_state = match lower.as_str() {
             "completed" => "COMPLETED",
             "failed" => "FAILED",
             "pending" => "PENDING",
             "running" => "RUNNING",
-            _ => "COMPLETED",
+            "timeout" => "TIMEOUT",
+            "cancelled" | "canceled" => "CANCELLED",
+            "out_of_memory" | "oom" => "OUT_OF_MEMORY",
+            "node_fail" | "nodefail" => "NODE_FAIL",
+            "preempted" => "PREEMPTED",
+            other => other,
         };
         metrics.retain(|m| m.state.matches_filter(target_state));
     }
@@ -315,10 +321,17 @@ pub fn generate_and_output_report(metrics: &[GPUMetrics], options: &ReportOption
 
     // Telegraf output path
     if options.telegraf {
+        // Only include terminal jobs — running/pending have no complete efficiency data
+        // and would emit misleading zeros.
+        let terminal: Vec<&GPUMetrics> = metrics.iter().filter(|m| m.state.is_terminal()).collect();
+        if terminal.is_empty() {
+            return Ok(());
+        }
+
         if options.allusers {
             // Group metrics by user, output one line per user
             let mut by_user: HashMap<String, Vec<&GPUMetrics>> = HashMap::new();
-            for m in metrics {
+            for m in terminal {
                 by_user.entry(m.user.clone()).or_default().push(m);
             }
             let mut users: Vec<&String> = by_user.keys().collect();
@@ -337,13 +350,14 @@ pub fn generate_and_output_report(metrics: &[GPUMetrics], options: &ReportOption
                 }
             }
         } else {
+            let terminal_owned: Vec<GPUMetrics> = terminal.iter().map(|m| (*m).clone()).collect();
             let user = options
                 .user
                 .as_deref()
-                .or_else(|| metrics.first().map(|m| m.user.as_str()))
+                .or_else(|| terminal_owned.first().map(|m| m.user.as_str()))
                 .unwrap_or("unknown");
             let line = GPUReporter::format_telegraf_weighted_avg(
-                metrics,
+                &terminal_owned,
                 user,
                 options.partition_filter.as_deref(),
                 options.account_filter.as_deref(),

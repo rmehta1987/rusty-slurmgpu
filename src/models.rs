@@ -11,6 +11,7 @@ pub enum JobState {
     Failed,
     Cancelled,
     Timeout,
+    OutOfMemory,
     NodeFail,
     Preempted,
     /// Pseudo-states like "WEIGHTED AVG" or unrecognized values.
@@ -26,6 +27,7 @@ impl JobState {
             Self::Failed => "FAILED",
             Self::Cancelled => "CANCELLED",
             Self::Timeout => "TIMEOUT",
+            Self::OutOfMemory => "OUT_OF_MEMORY",
             Self::NodeFail => "NODE_FAIL",
             Self::Preempted => "PREEMPTED",
             Self::Other(s) => s.as_str(),
@@ -49,6 +51,20 @@ impl JobState {
     pub fn is_running(&self) -> bool {
         *self == Self::Running
     }
+
+    /// True for states where sacct has complete efficiency data.
+    pub fn is_terminal(&self) -> bool {
+        matches!(
+            self,
+            Self::Completed
+                | Self::Failed
+                | Self::Cancelled
+                | Self::Timeout
+                | Self::OutOfMemory
+                | Self::NodeFail
+                | Self::Preempted
+        )
+    }
 }
 
 impl fmt::Display for JobState {
@@ -59,15 +75,19 @@ impl fmt::Display for JobState {
 
 impl From<&str> for JobState {
     fn from(s: &str) -> Self {
-        match s.to_uppercase().as_str() {
+        let upper = s.to_uppercase();
+        match upper.as_str() {
             "PENDING" => Self::Pending,
             "RUNNING" => Self::Running,
             "COMPLETED" => Self::Completed,
             "FAILED" => Self::Failed,
             "CANCELLED" => Self::Cancelled,
             "TIMEOUT" => Self::Timeout,
+            "OUT_OF_MEMORY" => Self::OutOfMemory,
             "NODE_FAIL" => Self::NodeFail,
             "PREEMPTED" => Self::Preempted,
+            // sacct reports "CANCELLED by <uid>" — treat as Cancelled
+            _ if upper.starts_with("CANCELLED") => Self::Cancelled,
             _ => Self::Other(s.to_string()),
         }
     }

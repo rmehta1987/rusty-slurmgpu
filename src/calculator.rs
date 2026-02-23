@@ -414,7 +414,7 @@ impl EfficiencyCalculator {
         let gpu_mem_str = format_memory_string(gpu_mem_mb);
         let gpu_util_str = if gpu_util > 0.0 {
             format!("{:.0}%", gpu_util)
-        } else if is_pending {
+        } else if is_pending_or_running {
             "---".to_string()
         } else {
             "0.0%".to_string()

@@ -140,7 +140,7 @@ pub struct ReportArgs {
     output: Option<String>,
 
     /// Filter jobs by state
-    #[arg(long, default_value = "all", value_parser = ["all", "completed", "failed", "pending", "running"])]
+    #[arg(long, default_value = "all", value_parser = ["all", "completed", "failed", "pending", "running", "timeout", "cancelled", "out_of_memory", "node_fail", "preempted"])]
     filter_state: String,
 
     /// Only show jobs with GPU efficiency >= this value

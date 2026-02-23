@@ -462,6 +462,9 @@ impl GPUReporter {
     ///
     /// Returns a single line like:
     /// `slurm_gpu_efficiency,user=ukh,partition=h200alloc cpu_eff=1.3,mem_eff=59.9,gpu_eff=100.0,gpu_util=100.0,gpu_mem_eff=89.7 1738800000000000000`
+    ///
+    /// Fields with no data ("---") are omitted so InfluxDB sees null rather than a false zero.
+    /// Only terminal jobs should be passed in (RUNNING/PENDING are filtered upstream).
     pub fn format_telegraf_weighted_avg(
         metrics: &[GPUMetrics],
         user: &str,
@@ -488,38 +491,45 @@ impl GPUReporter {
             tags.push(format!("account={}", a));
         }
 
-        // Build fields - use 0.0 for missing values so Prometheus gets a consistent field set
-        let parse_pct = |s: &str| -> f64 {
+        // Parse a percentage string; return None when data is unavailable ("---").
+        let parse_pct = |s: &str| -> Option<f64> {
             if s == "---" || s.is_empty() {
-                return 0.0;
+                return None;
             }
-            s.trim_end_matches('%').parse::<f64>().unwrap_or(0.0)
+            s.trim_end_matches('%').parse::<f64>().ok()
         };
 
-        let gpu_mem_val = if weighted_avg.gpu_mem != "---" && !weighted_avg.gpu_mem.is_empty() {
-            weighted_avg
-                .gpu_mem
-                .trim_end_matches('G')
-                .parse::<f64>()
-                .unwrap_or(0.0)
-        } else {
-            0.0
-        };
+        // Build fields — omit any that have no data so InfluxDB records null, not 0.
+        let mut fields: Vec<String> = Vec::new();
+        if let Some(v) = parse_pct(&weighted_avg.cpu_eff) {
+            fields.push(format!("cpu_eff={:.1}", v));
+        }
+        if let Some(v) = parse_pct(&weighted_avg.mem_eff) {
+            fields.push(format!("mem_eff={:.1}", v));
+        }
+        if let Some(v) = parse_pct(&weighted_avg.gpu_eff) {
+            fields.push(format!("gpu_eff={:.1}", v));
+        }
+        if let Some(v) = parse_pct(&weighted_avg.gpu_util) {
+            fields.push(format!("gpu_util={:.1}", v));
+        }
+        if let Some(v) = parse_pct(&weighted_avg.gpu_mem_eff) {
+            fields.push(format!("gpu_mem_eff={:.1}", v));
+        }
+        if weighted_avg.gpu_mem != "---" && !weighted_avg.gpu_mem.is_empty() {
+            if let Ok(v) = weighted_avg.gpu_mem.trim_end_matches('G').parse::<f64>() {
+                fields.push(format!("gpu_mem={:.1}", v));
+            }
+        }
 
-        let fields = format!(
-            "cpu_eff={:.1},mem_eff={:.1},gpu_eff={:.1},gpu_util={:.1},gpu_mem_eff={:.1},gpu_mem={:.1}",
-            parse_pct(&weighted_avg.cpu_eff),
-            parse_pct(&weighted_avg.mem_eff),
-            parse_pct(&weighted_avg.gpu_eff),
-            parse_pct(&weighted_avg.gpu_util),
-            parse_pct(&weighted_avg.gpu_mem_eff),
-            gpu_mem_val,
-        );
+        if fields.is_empty() {
+            return String::new();
+        }
 
         format!(
             "slurm_gpu_efficiency,{} {} {}",
             tags.join(","),
-            fields,
+            fields.join(","),
             timestamp_ns
         )
     }
