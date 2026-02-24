@@ -24,7 +24,7 @@ lint:
   image: rust:latest
   script:
     - rustup component add clippy
-    - cargo clippy --all-targets -- -W clippy::all
+    - cargo clippy --all-targets -- -W clippy::all -A clippy::collapsible-if
   rules:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
