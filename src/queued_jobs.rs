@@ -2,8 +2,8 @@ use std::collections::HashMap;
 use std::process::Command;
 
 use crate::command_ext::{run_with_timeout, SLURM_COMMAND_TIMEOUT};
+use crate::gres_parser::GresParser;
 use crate::models::QueuedJobInfo;
-use crate::parser::SlurmJobParser;
 
 /// Parse Slurm array task string and return count of pending tasks.
 pub(crate) fn parse_array_task_string(task_string: &str) -> i32 {
@@ -52,15 +52,28 @@ pub(crate) fn parse_array_task_string(task_string: &str) -> i32 {
     total.max(1) // At least 1 task
 }
 
+/// Return `None` for the Slurm "no value" sentinels used in squeue output.
+fn clean_field(s: &str) -> Option<&str> {
+    match s {
+        "" | "N/A" | "(null)" | "None" => None,
+        other => Some(other),
+    }
+}
+
 pub(crate) struct QueuedJobsCollector;
 
 impl QueuedJobsCollector {
     /// Get detailed information about queued/pending jobs.
+    ///
+    /// Uses `squeue --noheader -t PENDING` with a fixed pipe-delimited format:
+    /// `JobID|User|Partition|State|Reason|CPUs|TRESPerNode|ArrayTaskID`
     pub fn get_queued_jobs_info(debug: bool, partitions: Option<&[String]>) -> Vec<QueuedJobInfo> {
         let mut queued_jobs = Vec::new();
 
         let mut cmd = Command::new("/usr/bin/squeue");
-        cmd.args(["--json", "-t", "PENDING"]);
+        // %i=JobID, %u=User, %P=Partition, %T=State, %r=Reason,
+        // %C=NumCPUs, %b=TRESPerNode (gpu:N), %K=ArrayTaskID
+        cmd.args(["--noheader", "-t", "PENDING", "-o", "%i|%u|%P|%T|%r|%C|%b|%K"]);
 
         if let Some(parts) = partitions {
             let partition_str = parts.join(",");
@@ -68,152 +81,113 @@ impl QueuedJobsCollector {
         }
 
         if debug {
-            eprintln!("Debug: Running squeue --json for pending jobs");
+            eprintln!("Debug: Running squeue for pending jobs");
         }
 
         match run_with_timeout(cmd, SLURM_COMMAND_TIMEOUT) {
             Ok(output) if output.status.success() => {
                 let stdout = String::from_utf8_lossy(&output.stdout);
-                let data: serde_json::Value = match serde_json::from_str(&stdout) {
-                    Ok(v) => v,
-                    Err(e) => {
-                        if debug {
-                            eprintln!("Warning: Error parsing squeue JSON: {}", e);
-                        }
-                        return queued_jobs;
+                for line in stdout.lines() {
+                    let line = line.trim();
+                    if line.is_empty() {
+                        continue;
                     }
-                };
-
-                if let Some(jobs) = data.get("jobs").and_then(|v| v.as_array()) {
-                    for job in jobs {
-                        let job_id = job
-                            .get("job_id")
-                            .and_then(|v| v.as_i64())
-                            .map(|v| v.to_string())
-                            .unwrap_or_default();
-                        let user = job
-                            .get("user_name")
-                            .and_then(|v| v.as_str())
-                            .or_else(|| job.get("user").and_then(|v| v.as_str()))
-                            .unwrap_or("")
-                            .to_string();
-                        let partition = job
-                            .get("partition")
-                            .and_then(|v| v.as_str())
-                            .unwrap_or("")
-                            .to_string();
-
-                        // Get job state
-                        let state = job
-                            .get("job_state")
-                            .and_then(|v| v.as_array())
-                            .and_then(|arr| arr.first())
-                            .and_then(|v| v.as_str())
-                            .unwrap_or("PENDING")
-                            .to_string();
-
-                        // Get queue reason
-                        let reason = job
-                            .get("state_reason")
-                            .and_then(|v| v.as_str())
-                            .unwrap_or("")
-                            .to_string();
-
-                        // Get per-task CPU request
-                        let per_task_cpus = job
-                            .get("cpus")
-                            .and_then(|v| v.get("number"))
-                            .and_then(|v| v.as_i64())
-                            .unwrap_or(0) as i32;
-
-                        // Parse GPU info from tres_per_task or tres_req_str
-                        let tres_per_task = job
-                            .get("tres_per_task")
-                            .and_then(|v| v.as_str())
-                            .unwrap_or("");
-                        let tres_req_str = job
-                            .get("tres_req_str")
-                            .and_then(|v| v.as_str())
-                            .unwrap_or("");
-
-                        let mut gpu_count = 0i32;
-                        let mut gpu_type = "unknown".to_string();
-
-                        if !tres_per_task.is_empty() {
-                            let (count, gtype) =
-                                SlurmJobParser::extract_gpu_info_from_tres(tres_per_task);
-                            gpu_count = count;
-                            gpu_type = gtype;
+                    let fields: Vec<&str> = line.splitn(8, '|').collect();
+                    if fields.len() < 8 {
+                        if debug {
+                            eprintln!("Warning: unexpected squeue line: {}", line);
                         }
-                        if gpu_count == 0 && !tres_req_str.is_empty() {
-                            let (count, gtype) =
-                                SlurmJobParser::extract_gpu_info_from_tres(tres_req_str);
+                        continue;
+                    }
+
+                    let raw_job_id = fields[0];
+                    let user = fields[1].to_string();
+                    let partition = fields[2].to_string();
+                    let state = fields[3].to_string();
+                    let reason = fields[4].to_string();
+                    let per_task_cpus: i32 =
+                        clean_field(fields[5]).and_then(|s| s.parse().ok()).unwrap_or(0);
+                    let tres_per_node = clean_field(fields[6]).unwrap_or("");
+                    let array_task_id = clean_field(fields[7]).unwrap_or("");
+
+                    // Strip array spec from job ID if present: "49486702_[106-179%200]" → "49486702"
+                    let job_id = raw_job_id
+                        .split('_')
+                        .next()
+                        .unwrap_or(raw_job_id)
+                        .to_string();
+
+                    // Parse GPU info from TRESPerNode (%b): "gpu:N" or "gpu:TYPE:N"
+                    // %b produces GRES format (gpu:N), not TRES format (gres/gpu=N).
+                    let mut gpu_count = 0i32;
+                    let mut gpu_type = "unknown".to_string();
+                    if !tres_per_node.is_empty() {
+                        if let Some((gtype, count)) =
+                            GresParser::parse_gres_string(tres_per_node).into_iter().next()
+                        {
                             gpu_count = count;
-                            gpu_type = gtype;
-                        }
-
-                        let per_task_gpus = gpu_count;
-
-                        // Get array task information
-                        let array_task_string = job
-                            .get("array_task_string")
-                            .and_then(|v| v.as_str())
-                            .unwrap_or("")
-                            .to_string();
-                        let is_array_job = !array_task_string.is_empty();
-                        let array_task_count = if is_array_job {
-                            parse_array_task_string(&array_task_string)
-                        } else {
-                            1
-                        };
-
-                        // Calculate total resources (per-task * task count)
-                        let total_cpus = per_task_cpus * array_task_count;
-                        let total_gpus = per_task_gpus * array_task_count;
-
-                        let queued_job = QueuedJobInfo {
-                            job_id,
-                            user,
-                            partition,
-                            state,
-                            cpu_request: total_cpus,
-                            gpu_request: total_gpus,
-                            gpu_type_request: if gpu_type != "unknown" {
-                                Some(gpu_type)
-                            } else {
-                                None
-                            },
-                            queue_reason: reason,
-                            submit_time: None,
-                            is_array_job,
-                            array_task_count,
-                            array_task_string: if is_array_job {
-                                Some(array_task_string)
-                            } else {
-                                None
-                            },
-                            per_task_cpus,
-                            per_task_gpus,
-                        };
-                        queued_jobs.push(queued_job);
-
-                        if debug && queued_jobs.len() <= 5 {
-                            let last = queued_jobs.last().unwrap();
-                            if last.is_array_job {
-                                eprintln!(
-                                    "Debug: Queued array job {} by {}: {} tasks x ({} CPUs, {} GPUs) = {} total CPUs, {} total GPUs",
-                                    last.job_id, last.user, last.array_task_count,
-                                    last.per_task_cpus, last.per_task_gpus,
-                                    last.cpu_request, last.gpu_request
-                                );
-                            } else {
-                                eprintln!(
-                                    "Debug: Queued job {} by {}: {} CPUs, {} GPUs",
-                                    last.job_id, last.user, last.cpu_request, last.gpu_request
-                                );
+                            if gtype != "gpu" {
+                                gpu_type = gtype;
                             }
                         }
                     }
+                    let per_task_gpus = gpu_count;
+
+                    // Array task info: %K gives the task range directly
+                    let array_task_string = array_task_id.to_string();
+                    let is_array_job = !array_task_string.is_empty();
+                    let array_task_count = if is_array_job {
+                        parse_array_task_string(&array_task_string)
+                    } else {
+                        1
+                    };
+
+                    let total_cpus = per_task_cpus * array_task_count;
+                    let total_gpus = per_task_gpus * array_task_count;
+
+                    let queued_job = QueuedJobInfo {
+                        job_id,
+                        user,
+                        partition,
+                        state,
+                        cpu_request: total_cpus,
+                        gpu_request: total_gpus,
+                        gpu_type_request: if gpu_type != "unknown" {
+                            Some(gpu_type)
+                        } else {
+                            None
+                        },
+                        queue_reason: reason,
+                        submit_time: None,
+                        is_array_job,
+                        array_task_count,
+                        array_task_string: if is_array_job {
+                            Some(array_task_string)
+                        } else {
+                            None
+                        },
+                        per_task_cpus,
+                        per_task_gpus,
+                    };
+
+                    if debug && queued_jobs.len() < 5 {
+                        if queued_job.is_array_job {
+                            eprintln!(
+                                "Debug: Queued array job {} by {}: {} tasks x ({} CPUs, {} GPUs) = {} total CPUs, {} total GPUs",
+                                queued_job.job_id, queued_job.user, queued_job.array_task_count,
+                                queued_job.per_task_cpus, queued_job.per_task_gpus,
+                                queued_job.cpu_request, queued_job.gpu_request
+                            );
+                        } else {
+                            eprintln!(
+                                "Debug: Queued job {} by {}: {} CPUs, {} GPUs",
+                                queued_job.job_id, queued_job.user,
+                                queued_job.cpu_request, queued_job.gpu_request
+                            );
+                        }
+                    }
+
+                    queued_jobs.push(queued_job);
                 }
             }
             Ok(output) => {
@@ -281,5 +255,49 @@ mod tests {
     fn test_parse_array_task_string_mixed() {
         // "1-5,10-15,20" -> 5 + 6 + 1 = 12
         assert_eq!(parse_array_task_string("1-5,10-15,20"), 12);
+    }
+
+    #[test]
+    fn test_clean_field_sentinels() {
+        assert_eq!(clean_field("N/A"), None);
+        assert_eq!(clean_field(""), None);
+        assert_eq!(clean_field("(null)"), None);
+        assert_eq!(clean_field("gpu:1"), Some("gpu:1"));
+    }
+
+    #[test]
+    fn test_parse_squeue_pending_line_no_gpu() {
+        // Simulate: 49448599|aaz|aaz|PENDING|BeginTime|20|N/A|N/A
+        let line = "49448599|aaz|aaz|PENDING|BeginTime|20|N/A|N/A";
+        let fields: Vec<&str> = line.splitn(8, '|').collect();
+        assert_eq!(fields[0], "49448599");
+        assert_eq!(fields[5], "20");
+        assert_eq!(clean_field(fields[6]), None); // N/A tres
+        assert_eq!(clean_field(fields[7]), None); // N/A array
+    }
+
+    #[test]
+    fn test_parse_squeue_pending_line_array_job() {
+        // Simulate: 49486702_[106-179%200]|zheful|amd|PENDING|...|8|N/A|106-179%200
+        let line = "49486702_[106-179%200]|zheful|amd|PENDING|QOSMaxNodePerUserLimit|8|N/A|106-179%200";
+        let fields: Vec<&str> = line.splitn(8, '|').collect();
+        let raw_job_id = fields[0];
+        let job_id = raw_job_id.split('_').next().unwrap_or(raw_job_id);
+        assert_eq!(job_id, "49486702");
+        let array_task_id = clean_field(fields[7]).unwrap_or("");
+        assert_eq!(array_task_id, "106-179%200");
+        assert_eq!(parse_array_task_string(array_task_id), 74);
+    }
+
+    #[test]
+    fn test_parse_squeue_pending_line_gpu() {
+        // Simulate: 43900631|lwu12|beagle3|PENDING|...|32|gpu:4|N/A
+        // %b produces GRES format "gpu:N", not TRES format "gres/gpu=N"
+        let line = "43900631|lwu12|beagle3|PENDING|DependencyNeverSatisfied|32|gpu:4|N/A";
+        let fields: Vec<&str> = line.splitn(8, '|').collect();
+        let tres = clean_field(fields[6]).unwrap_or("");
+        let gpu_info = GresParser::parse_gres_string(tres);
+        let count = gpu_info.first().map(|(_, c)| *c).unwrap_or(0);
+        assert_eq!(count, 4);
     }
 }

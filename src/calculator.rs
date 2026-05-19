@@ -458,28 +458,9 @@ impl EfficiencyCalculator {
 
     fn extract_node_name(job: &SlurmJob) -> Option<String> {
         for step in &job.steps {
-            if let Some(ref nodes) = step.nodes {
-                // Check 'range' field
-                if let Some(range) = nodes.get("range") {
-                    if let Some(s) = range.as_str() {
-                        return Some(s.to_string());
-                    }
-                }
-
-                // Check 'list' field
-                if let Some(list) = nodes.get("list") {
-                    if let Some(arr) = list.as_array() {
-                        if let Some(first) = arr.first().and_then(|v| v.as_str()) {
-                            return Some(first.to_string());
-                        }
-                    }
-                }
-
-                // Direct node names as keys
-                for key in nodes.keys() {
-                    if key != "count" && key != "range" && key != "list" {
-                        return Some(key.clone());
-                    }
+            if let Some(ref node_str) = step.nodes {
+                if !node_str.is_empty() {
+                    return Some(node_str.clone());
                 }
             }
         }

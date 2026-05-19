@@ -5,12 +5,29 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use crate::calculator::gpu_memory_mb;
 use crate::command_ext::{run_with_timeout, SLURM_COMMAND_TIMEOUT};
 use crate::models::*;
+use crate::scontrol_parser::{clean_value, parse_datetime_epoch, parse_duration_minutes, parse_records};
 use crate::tres_parser::TresParser;
+
+/// Parsed fields from `scontrol show job` that the sstat path needs.
+#[derive(Debug, Clone)]
+pub struct JobDetail {
+    pub job_id: i64,
+    pub user: String,
+    pub partition: String,
+    pub state: String,
+    pub nodes: String,
+    pub num_cpus: i32,
+    pub tres_alloc: String,
+    pub start_epoch: Option<i64>,
+    pub time_limit_minutes: Option<i64>,
+    pub account: Option<String>,
+    pub tres_per_node: String,
+}
 
 pub struct SstatMonitor;
 
 impl SstatMonitor {
-    /// Get list of job IDs using squeue (running and pending).
+    /// Get list of job IDs from squeue (running and pending).
     pub fn get_jobs(
         user: Option<&str>,
         partition: Option<&str>,
@@ -18,7 +35,7 @@ impl SstatMonitor {
         debug: bool,
     ) -> Vec<String> {
         let mut cmd = Command::new("squeue");
-        cmd.args(["--json", "--state=RUNNING,PENDING"]);
+        cmd.args(["--noheader", "--state=RUNNING,PENDING", "-o", "%i"]);
 
         if let Some(u) = user {
             cmd.args(["-u", u]);
@@ -28,28 +45,17 @@ impl SstatMonitor {
         }
 
         if debug {
-            eprintln!("Debug: Running squeue --json for running/pending jobs");
+            eprintln!("Debug: Running squeue for running/pending job IDs");
         }
 
         match run_with_timeout(cmd, SLURM_COMMAND_TIMEOUT) {
             Ok(output) if output.status.success() => {
                 let stdout = String::from_utf8_lossy(&output.stdout);
-                let data: serde_json::Value = match serde_json::from_str(&stdout) {
-                    Ok(v) => v,
-                    Err(e) => {
-                        eprintln!("Error parsing squeue output: {}", e);
-                        return Vec::new();
-                    }
-                };
-
-                let mut job_ids = Vec::new();
-                if let Some(jobs) = data.get("jobs").and_then(|v| v.as_array()) {
-                    for job in jobs {
-                        if let Some(job_id) = job.get("job_id").and_then(|v| v.as_i64()) {
-                            job_ids.push(job_id.to_string());
-                        }
-                    }
-                }
+                let mut job_ids: Vec<String> = stdout
+                    .lines()
+                    .map(|l| l.trim().to_string())
+                    .filter(|l| !l.is_empty())
+                    .collect();
 
                 if debug {
                     eprintln!("Debug: Found {} jobs", job_ids.len());
@@ -72,29 +78,159 @@ impl SstatMonitor {
         }
     }
 
-    /// Get job information from squeue for a specific job.
-    pub fn get_job_info(job_id: &str, debug: bool) -> Option<serde_json::Value> {
-        let mut cmd = Command::new("squeue");
-        cmd.args(["--json", "-j", job_id]);
+    /// Fetch all job details in one `scontrol show job` call, indexed by job ID string.
+    ///
+    /// This is much more efficient than one call per job and also provides the
+    /// `TRES=` field (tres_alloc) that plain `squeue -o` cannot supply.
+    pub fn get_all_job_details(debug: bool) -> HashMap<String, JobDetail> {
+        let mut cmd = Command::new("scontrol");
+        cmd.args(["show", "job"]);
+
         let output = match run_with_timeout(cmd, SLURM_COMMAND_TIMEOUT) {
-            Ok(output) if output.status.success() => output,
-            Ok(_) | Err(_) => {
+            Ok(o) if o.status.success() => o,
+            Ok(o) => {
                 if debug {
-                    eprintln!("Warning: Failed to get job info for {}", job_id);
+                    let stderr = String::from_utf8_lossy(&o.stderr);
+                    eprintln!("Warning: scontrol show job failed: {}", stderr);
                 }
-                return None;
+                return HashMap::new();
+            }
+            Err(e) => {
+                eprintln!("Warning: scontrol show job error: {}", e);
+                return HashMap::new();
             }
         };
 
         let stdout = String::from_utf8_lossy(&output.stdout);
-        let data: serde_json::Value = match serde_json::from_str(&stdout) {
-            Ok(v) => v,
-            Err(_) => return None,
-        };
+        let records = parse_records(&stdout);
 
-        data.get("jobs")
-            .and_then(|v| v.as_array())
-            .and_then(|arr| arr.first().cloned())
+        if debug {
+            eprintln!("Debug: scontrol show job returned {} records", records.len());
+        }
+
+        let mut map = HashMap::new();
+        for rec in records {
+            let raw_job_id = match rec.get("JobId").and_then(|s| clean_value(s)) {
+                Some(v) => v.to_string(),
+                None => continue,
+            };
+            let job_id_num: i64 = raw_job_id.parse().unwrap_or(0);
+
+            // UserId=name(uid) → extract name before '('
+            let user = rec
+                .get("UserId")
+                .and_then(|s| clean_value(s))
+                .map(|s| s.split('(').next().unwrap_or(s).to_string())
+                .unwrap_or_default();
+
+            let partition = rec
+                .get("Partition")
+                .and_then(|s| clean_value(s))
+                .unwrap_or("")
+                .to_string();
+
+            let state = rec
+                .get("JobState")
+                .and_then(|s| clean_value(s))
+                .unwrap_or("")
+                .to_string();
+
+            let nodes = rec
+                .get("NodeList")
+                .and_then(|s| clean_value(s))
+                .unwrap_or("")
+                .to_string();
+
+            let num_cpus: i32 = rec
+                .get("NumCPUs")
+                .and_then(|s| s.parse().ok())
+                .unwrap_or(0);
+
+            // TRES= is the full allocated TRES: cpu=16,mem=500G,node=1,...,gres/gpu=4
+            let tres_alloc = rec
+                .get("TRES")
+                .and_then(|s| clean_value(s))
+                .unwrap_or("")
+                .to_string();
+
+            let start_epoch = rec
+                .get("StartTime")
+                .and_then(|s| parse_datetime_epoch(s));
+
+            let time_limit_minutes = rec
+                .get("TimeLimit")
+                .and_then(|s| parse_duration_minutes(s));
+
+            let account = rec
+                .get("Account")
+                .and_then(|s| clean_value(s))
+                .map(|s| s.to_string());
+
+            let tres_per_node = rec
+                .get("TresPerNode")
+                .and_then(|s| clean_value(s))
+                .unwrap_or("")
+                .to_string();
+
+            let detail = JobDetail {
+                job_id: job_id_num,
+                user,
+                partition,
+                state,
+                nodes,
+                num_cpus,
+                tres_alloc,
+                start_epoch,
+                time_limit_minutes,
+                account,
+                tres_per_node,
+            };
+
+            map.insert(raw_job_id, detail);
+        }
+
+        map
+    }
+
+    /// Get job detail for a single job ID (used when a full fetch is not warranted).
+    pub fn get_job_detail(job_id: &str, debug: bool) -> Option<JobDetail> {
+        let mut cmd = Command::new("scontrol");
+        cmd.args(["show", "job", job_id]);
+
+        let output = run_with_timeout(cmd, SLURM_COMMAND_TIMEOUT).ok()?;
+        if !output.status.success() {
+            if debug {
+                eprintln!("Warning: Failed to get job info for {}", job_id);
+            }
+            return None;
+        }
+
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        let records = parse_records(&stdout);
+        let rec = records.into_iter().next()?;
+
+        let raw_job_id = rec.get("JobId").and_then(|s| clean_value(s))?.to_string();
+        let job_id_num: i64 = raw_job_id.parse().unwrap_or(0);
+
+        let user = rec
+            .get("UserId")
+            .and_then(|s| clean_value(s))
+            .map(|s| s.split('(').next().unwrap_or(s).to_string())
+            .unwrap_or_default();
+
+        Some(JobDetail {
+            job_id: job_id_num,
+            user,
+            partition: rec.get("Partition").and_then(|s| clean_value(s)).unwrap_or("").to_string(),
+            state: rec.get("JobState").and_then(|s| clean_value(s)).unwrap_or("").to_string(),
+            nodes: rec.get("NodeList").and_then(|s| clean_value(s)).unwrap_or("").to_string(),
+            num_cpus: rec.get("NumCPUs").and_then(|s| s.parse().ok()).unwrap_or(0),
+            tres_alloc: rec.get("TRES").and_then(|s| clean_value(s)).unwrap_or("").to_string(),
+            start_epoch: rec.get("StartTime").and_then(|s| parse_datetime_epoch(s)),
+            time_limit_minutes: rec.get("TimeLimit").and_then(|s| parse_duration_minutes(s)),
+            account: rec.get("Account").and_then(|s| clean_value(s)).map(|s| s.to_string()),
+            tres_per_node: rec.get("TresPerNode").and_then(|s| clean_value(s)).unwrap_or("").to_string(),
+        })
     }
 
     /// Parse TRES usage string into dictionary.
@@ -292,7 +428,6 @@ impl SstatMonitor {
         let mut cpu_eff = "---".to_string();
         let mut mem_eff = "---".to_string();
 
-        // CPU efficiency
         let ave_cpu = sstat.get("AveCPU").map(|s| s.as_str()).unwrap_or("");
         if !ave_cpu.is_empty() && elapsed_seconds > 0 && alloc_cpus > 0 {
             let cpu_seconds = Self::parse_time_to_seconds(ave_cpu);
@@ -303,7 +438,6 @@ impl SstatMonitor {
             }
         }
 
-        // Memory efficiency
         let max_rss = sstat.get("MaxRSS").map(|s| s.as_str()).unwrap_or("");
         if !max_rss.is_empty() && max_rss != "0" {
             if let Some(max_rss_kb) = Self::parse_memory_with_unit(max_rss) {
@@ -320,71 +454,45 @@ impl SstatMonitor {
         (cpu_eff, mem_eff)
     }
 
-    /// Create GPUMetrics from job info and optional sstat data.
+    /// Create GPUMetrics from a JobDetail and optional sstat data.
     pub fn create_metrics_from_job_and_sstat(
-        job_info: &serde_json::Value,
+        job: &JobDetail,
         sstat_data: Option<&HashMap<String, String>>,
         node_gpu_map: &HashMap<String, String>,
         debug: bool,
     ) -> Option<GPUMetrics> {
-        let job_id_num = job_info.get("job_id").and_then(|v| v.as_i64()).unwrap_or(0);
-        let job_id_str = job_id_num.to_string();
-        let user = job_info
-            .get("user_name")
-            .and_then(|v| v.as_str())
-            .unwrap_or("")
-            .to_string();
-        let partition = job_info
-            .get("partition")
-            .and_then(|v| v.as_str())
-            .unwrap_or("")
-            .to_string();
-        let node_name = job_info
-            .get("nodes")
-            .and_then(|v| v.as_str())
-            .unwrap_or("")
-            .to_string();
-        let alloc_cpus = job_info
-            .get("cpus")
-            .and_then(|v| v.get("number"))
-            .and_then(|v| v.as_i64())
-            .unwrap_or(0) as i32;
-        let tres_alloc_str = job_info
-            .get("tres_alloc_str")
-            .and_then(|v| v.as_str())
-            .unwrap_or("");
+        let job_id_str = job.job_id.to_string();
 
-        // Calculate elapsed time
-        let start_time = job_info
-            .get("start_time")
-            .and_then(|v| v.get("number"))
-            .and_then(|v| v.as_i64())
-            .unwrap_or(0);
         let now = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .unwrap_or_default()
             .as_secs() as i64;
-        let (elapsed, elapsed_seconds) = if start_time > 0 {
-            let secs = now - start_time;
-            (
-                format!(
-                    "{:02}:{:02}:{:02}",
-                    secs / 3600,
-                    (secs % 3600) / 60,
-                    secs % 60
-                ),
-                secs,
-            )
+
+        let (elapsed, elapsed_seconds) = if let Some(start) = job.start_epoch {
+            if start > 0 {
+                let secs = now - start;
+                (
+                    format!(
+                        "{:02}:{:02}:{:02}",
+                        secs / 3600,
+                        (secs % 3600) / 60,
+                        secs % 60
+                    ),
+                    secs,
+                )
+            } else {
+                ("00:00:00".to_string(), 0i64)
+            }
         } else {
             ("00:00:00".to_string(), 0i64)
         };
 
-        // Detect GPU type and count
-        let resources = TresParser::parse_tres_string(tres_alloc_str);
+        // Detect GPU type and count from TRES allocation
+        let resources = TresParser::parse_tres_string(&job.tres_alloc);
         let alloc_gpus = TresParser::extract_gpu_count(&resources);
         let gpu_type = TresParser::extract_gpu_type_from_tres(&resources)
             .filter(|t| t != "gpu")
-            .or_else(|| node_gpu_map.get(&node_name).cloned())
+            .or_else(|| node_gpu_map.get(&job.nodes).cloned())
             .unwrap_or_else(|| "default".to_string());
         let total_gpu_mem_mb = if alloc_gpus > 0 {
             gpu_memory_mb(&gpu_type)
@@ -392,7 +500,6 @@ impl SstatMonitor {
             0
         };
 
-        // Calculate efficiency metrics from sstat
         let (gpu_util, gpu_mem, gpu_mem_eff, gpu_eff, cpu_eff, mem_eff) =
             if let Some(sstat) = sstat_data {
                 let (gu, gm, gme, ge) = Self::calculate_gpu_metrics(
@@ -404,9 +511,9 @@ impl SstatMonitor {
                 );
                 let (ce, me) = Self::calculate_cpu_mem_efficiency(
                     sstat,
-                    tres_alloc_str,
+                    &job.tres_alloc,
                     elapsed_seconds,
-                    alloc_cpus,
+                    job.num_cpus,
                 );
                 (gu, gm, gme, ge, ce, me)
             } else {
@@ -420,13 +527,7 @@ impl SstatMonitor {
                 )
             };
 
-        // Time efficiency
-        let time_limit_seconds = job_info
-            .get("time_limit")
-            .and_then(|v| v.get("number"))
-            .and_then(|v| v.as_i64())
-            .unwrap_or(0)
-            * 60;
+        let time_limit_seconds = job.time_limit_minutes.unwrap_or(0) * 60;
         let time_eff = if time_limit_seconds > 0 && elapsed_seconds > 0 {
             format!(
                 "{:.1}%",
@@ -436,21 +537,14 @@ impl SstatMonitor {
             "---".to_string()
         };
 
-        let state = JobState::from(
-            job_info
-                .get("job_state")
-                .and_then(|v| v.as_array())
-                .and_then(|arr| arr.first())
-                .and_then(|s| s.as_str())
-                .unwrap_or("RUNNING"),
-        );
+        let state = JobState::from(job.state.as_str());
 
         Some(GPUMetrics {
-            job_id: JobId::Numeric(job_id_num),
-            user,
+            job_id: JobId::Numeric(job.job_id),
+            user: job.user.clone(),
             state,
             elapsed,
-            partition,
+            partition: job.partition.clone(),
             gpu_util,
             gpu_mem,
             gpu_eff,
@@ -458,10 +552,10 @@ impl SstatMonitor {
             time_eff,
             cpu_eff,
             mem_eff,
-            node: if node_name.is_empty() {
+            node: if job.nodes.is_empty() {
                 None
             } else {
-                Some(node_name)
+                Some(job.nodes.clone())
             },
             gpu_type: if gpu_type != "default" && alloc_gpus > 0 {
                 Some(gpu_type)
@@ -469,10 +563,7 @@ impl SstatMonitor {
                 None
             },
             gpu_count: alloc_gpus,
-            account: job_info
-                .get("account")
-                .and_then(|v| v.as_str())
-                .map(|s| s.to_string()),
+            account: job.account.clone(),
         })
     }
 
@@ -533,17 +624,49 @@ impl SstatMonitor {
 
         eprintln!("Monitoring {} jobs...", jobs_to_monitor.len());
 
+        // One scontrol call for all job details
+        let all_details = Self::get_all_job_details(debug);
+
         let mut failed_sstat = 0;
 
         for (i, job_id) in jobs_to_monitor.iter().enumerate() {
-            // Get job info from squeue
-            let job_info = match Self::get_job_info(job_id, debug) {
-                Some(info) => info,
+            let job = match all_details.get(job_id) {
+                Some(d) => d,
                 None => {
-                    if debug {
-                        eprintln!("Warning: Could not get info for job {}", job_id);
+                    // Fall back to individual lookup (e.g. job finished between squeue and scontrol)
+                    match Self::get_job_detail(job_id, debug) {
+                        Some(d) => {
+                            eprint!(
+                                "\rProcessing job {} ({}/{})...",
+                                job_id,
+                                i + 1,
+                                jobs_to_monitor.len()
+                            );
+                            let sstat_data = if d.state == "RUNNING" {
+                                Self::run_sstat(job_id, debug)
+                            } else {
+                                None
+                            };
+                            if let Some(m) = Self::create_metrics_from_job_and_sstat(
+                                &d,
+                                sstat_data.as_ref(),
+                                node_gpu_map,
+                                debug,
+                            ) {
+                                if sstat_data.is_none() {
+                                    failed_sstat += 1;
+                                }
+                                metrics.push(m);
+                            }
+                            continue;
+                        }
+                        None => {
+                            if debug {
+                                eprintln!("Warning: Could not get info for job {}", job_id);
+                            }
+                            continue;
+                        }
                     }
-                    continue;
                 }
             };
 
@@ -554,29 +677,19 @@ impl SstatMonitor {
                 jobs_to_monitor.len()
             );
 
-            // Only run sstat for running jobs (pending jobs have no stats)
-            let is_running = job_info
-                .get("job_state")
-                .and_then(|v| v.as_array())
-                .and_then(|arr| arr.first())
-                .and_then(|s| s.as_str())
-                == Some("RUNNING");
-
+            let is_running = job.state == "RUNNING";
             let sstat_data = if is_running {
                 Self::run_sstat(job_id, debug)
             } else {
                 None
             };
 
-            // Create metrics
-            let metric = Self::create_metrics_from_job_and_sstat(
-                &job_info,
+            if let Some(m) = Self::create_metrics_from_job_and_sstat(
+                job,
                 sstat_data.as_ref(),
                 node_gpu_map,
                 debug,
-            );
-
-            if let Some(m) = metric {
+            ) {
                 if sstat_data.is_none() {
                     failed_sstat += 1;
                 }
@@ -586,7 +699,7 @@ impl SstatMonitor {
             }
         }
 
-        eprintln!(); // Clear the progress line
+        eprintln!();
 
         if failed_sstat > 0 {
             eprintln!(
@@ -596,5 +709,55 @@ impl SstatMonitor {
         }
 
         metrics
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    const JOB_RECORD: &str = r"JobId=49486060 JobName=run_midway.sh
+   UserId=anthonyz(1544495742) GroupId=anthonyz(1544495742) MCS_label=N/A
+   Priority=142870 Nice=0 Account=pi-pedramh QOS=pedramh-gpu
+   JobState=RUNNING Reason=None Dependency=(null)
+   RunTime=21:59:07 TimeLimit=3-00:00:00 TimeMin=N/A
+   StartTime=2026-05-11T13:32:02 EndTime=2026-05-14T13:32:02
+   Partition=pedramh-gpu AllocNode:Sid=midway3-mgt2:2108563
+   NodeList=midway3-0423
+   NumNodes=1 NumCPUs=16 NumTasks=4 CPUs/Task=4
+   TRES=cpu=16,mem=500G,node=1,billing=16,gres/gpu=4
+   TresPerNode=gpu:4";
+
+    #[test]
+    fn test_parse_job_record_fields() {
+        use crate::scontrol_parser::parse_records;
+        let records = parse_records(JOB_RECORD);
+        assert_eq!(records.len(), 1);
+        let rec = &records[0];
+
+        assert_eq!(rec.get("JobId").map(|s| s.as_str()), Some("49486060"));
+        assert_eq!(rec.get("JobState").map(|s| s.as_str()), Some("RUNNING"));
+        assert_eq!(rec.get("Partition").map(|s| s.as_str()), Some("pedramh-gpu"));
+        assert_eq!(rec.get("NodeList").map(|s| s.as_str()), Some("midway3-0423"));
+        assert_eq!(rec.get("NumCPUs").map(|s| s.as_str()), Some("16"));
+        assert_eq!(
+            rec.get("TRES").map(|s| s.as_str()),
+            Some("cpu=16,mem=500G,node=1,billing=16,gres/gpu=4")
+        );
+        assert_eq!(rec.get("Account").map(|s| s.as_str()), Some("pi-pedramh"));
+        assert_eq!(rec.get("TresPerNode").map(|s| s.as_str()), Some("gpu:4"));
+    }
+
+    #[test]
+    fn test_user_id_parsing() {
+        let raw = "anthonyz(1544495742)";
+        let user = raw.split('(').next().unwrap_or(raw);
+        assert_eq!(user, "anthonyz");
+    }
+
+    #[test]
+    fn test_time_limit_parsing() {
+        use crate::scontrol_parser::parse_duration_minutes;
+        assert_eq!(parse_duration_minutes("3-00:00:00"), Some(3 * 1440));
+        assert_eq!(parse_duration_minutes("2:00:00"), Some(120));
+        assert_eq!(parse_duration_minutes("N/A"), None);
     }
 }

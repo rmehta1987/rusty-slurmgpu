@@ -2,10 +2,12 @@ use std::collections::HashMap;
 use std::process::Command;
 use std::sync::OnceLock;
 
+use crate::cluster_data::gpu_type_from_features;
 use crate::command_ext::{run_with_timeout, SACCT_TIMEOUT, SLURM_COMMAND_TIMEOUT};
 use crate::constants::{SECONDS_PER_HOUR, SECONDS_PER_MINUTE};
 use crate::errors::GpuReportError;
 use crate::models::{GPUMetrics, SummaryMetrics};
+use crate::scontrol_parser::{clean_value, parse_duration_minutes, parse_records};
 
 /// Cache for partition time limits (thread-safe, initialized once).
 static PARTITION_TIME_LIMITS_CACHE: OnceLock<HashMap<String, PartitionTimeLimits>> =
@@ -26,45 +28,31 @@ pub(crate) fn get_partition_time_limits(
         let mut partition_limits = HashMap::new();
 
         let mut cmd = Command::new("scontrol");
-        cmd.args(["show", "partition", "--json"]);
+        cmd.args(["show", "partition"]);
         match run_with_timeout(cmd, SLURM_COMMAND_TIMEOUT) {
             Ok(output) if output.status.success() => {
                 let stdout = String::from_utf8_lossy(&output.stdout);
-                if let Ok(data) = serde_json::from_str::<serde_json::Value>(&stdout) {
-                    if let Some(partitions) = data.get("partitions").and_then(|v| v.as_array()) {
-                        for partition in partitions {
-                            let name = partition
-                                .get("name")
-                                .and_then(|v| v.as_str())
-                                .unwrap_or("")
-                                .to_string();
+                for rec in parse_records(&stdout) {
+                    let name = match rec.get("PartitionName").and_then(|s| clean_value(s)) {
+                        Some(n) => n.to_string(),
+                        None => continue,
+                    };
 
-                            let default_minutes = partition
-                                .get("default_time")
-                                .and_then(|v| v.get("number"))
-                                .and_then(|v| v.as_i64());
+                    let default_minutes = rec
+                        .get("DefaultTime")
+                        .and_then(|s| parse_duration_minutes(s));
+                    let max_minutes = rec
+                        .get("MaxTime")
+                        .and_then(|s| parse_duration_minutes(s));
 
-                            let max_minutes = partition
-                                .get("max_time")
-                                .and_then(|v| v.get("number"))
-                                .and_then(|v| v.as_i64());
-
-                            if debug && default_minutes.is_some() {
-                                eprintln!(
-                                    "Debug: Partition {} - Default: {:?} min, Max: {:?} min",
-                                    name, default_minutes, max_minutes
-                                );
-                            }
-
-                            partition_limits.insert(
-                                name,
-                                PartitionTimeLimits {
-                                    default_minutes,
-                                    max_minutes,
-                                },
-                            );
-                        }
+                    if debug && default_minutes.is_some() {
+                        eprintln!(
+                            "Debug: Partition {} - Default: {:?} min, Max: {:?} min",
+                            name, default_minutes, max_minutes
+                        );
                     }
+
+                    partition_limits.insert(name, PartitionTimeLimits { default_minutes, max_minutes });
                 }
             }
             Ok(output) => {
@@ -85,41 +73,45 @@ pub(crate) fn get_partition_time_limits(
 }
 
 /// Build a mapping of node names to GPU types using scontrol.
+///
+/// On clusters where `Gres=gpu:N` carries no model name, the GPU type is
+/// derived from the `AvailableFeatures` / `ActiveFeatures` field by matching
+/// against a known set of GPU model tokens (see [`gpu_type_from_features`]).
 pub fn build_node_gpu_mapping(debug: bool) -> HashMap<String, String> {
     let mut node_gpu_map = HashMap::new();
 
     let mut cmd = Command::new("scontrol");
-    cmd.args(["show", "node", "--json"]);
+    cmd.args(["show", "node"]);
     match run_with_timeout(cmd, SLURM_COMMAND_TIMEOUT) {
         Ok(output) if output.status.success() => {
             let stdout = String::from_utf8_lossy(&output.stdout);
-            if let Ok(data) = serde_json::from_str::<serde_json::Value>(&stdout) {
-                if let Some(nodes) = data.get("nodes").and_then(|v| v.as_array()) {
-                    for node in nodes {
-                        let node_name = node
-                            .get("name")
-                            .and_then(|v| v.as_str())
-                            .unwrap_or("")
-                            .to_string();
-                        let gres = node.get("gres").and_then(|v| v.as_str()).unwrap_or("");
+            for rec in parse_records(&stdout) {
+                let node_name = match rec.get("NodeName").and_then(|s| clean_value(s)) {
+                    Some(n) => n.to_string(),
+                    None => continue,
+                };
 
-                        if !gres.is_empty() && gres.contains("gpu:") {
-                            let parts: Vec<&str> = gres.split(':').collect();
-                            if parts.len() >= 3 {
-                                let gpu_type = parts[1];
-                                if !gpu_type.is_empty() && gpu_type != "gpu" {
-                                    node_gpu_map.insert(node_name.clone(), gpu_type.to_string());
-                                    if debug && node_gpu_map.len() <= 5 {
-                                        eprintln!(
-                                            "Debug: Node {} has GPU type: {} (from GRES: {})",
-                                            node_name, gpu_type, gres
-                                        );
-                                    }
-                                }
-                            }
-                        }
-                    }
+                let gres = rec.get("Gres").map(|s| s.as_str()).unwrap_or("");
+                if !gres.contains("gpu:") {
+                    continue;
                 }
+
+                // Try to derive GPU type from AvailableFeatures (plain text Gres
+                // on this cluster has no model name embedded).
+                let features = rec
+                    .get("AvailableFeatures")
+                    .and_then(|s| clean_value(s))
+                    .unwrap_or("");
+                let gpu_type = gpu_type_from_features(features)
+                    .unwrap_or_else(|| "gpu".to_string());
+
+                if debug && node_gpu_map.len() < 5 {
+                    eprintln!(
+                        "Debug: Node {} has GPU type: {} (from features: {})",
+                        node_name, gpu_type, features
+                    );
+                }
+                node_gpu_map.insert(node_name, gpu_type);
             }
             if debug {
                 eprintln!(

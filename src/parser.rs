@@ -270,13 +270,8 @@ impl SlurmJobParser {
 
         // Parse node information
         let node_list_str = job_data.get("NodeList").map(|s| s.as_str()).unwrap_or("");
-        let step_nodes = if !node_list_str.is_empty() && !node_list_str.trim().is_empty() {
-            let mut map = HashMap::new();
-            map.insert(
-                "range".to_string(),
-                serde_json::Value::String(node_list_str.trim().to_string()),
-            );
-            Some(map)
+        let step_nodes = if !node_list_str.trim().is_empty() {
+            Some(node_list_str.trim().to_string())
         } else {
             None
         };

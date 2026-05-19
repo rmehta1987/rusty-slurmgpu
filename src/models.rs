@@ -1,4 +1,4 @@
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 use std::collections::HashMap;
 use std::fmt;
 
@@ -121,31 +121,6 @@ impl Default for JobId {
     }
 }
 
-impl<'de> Deserialize<'de> for JobId {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: serde::Deserializer<'de>,
-    {
-        let value = serde_json::Value::deserialize(deserializer)?;
-        match value {
-            serde_json::Value::Number(n) => {
-                if let Some(i) = n.as_i64() {
-                    Ok(JobId::Numeric(i))
-                } else {
-                    Ok(JobId::Numeric(0))
-                }
-            }
-            serde_json::Value::String(s) => {
-                if let Ok(n) = s.parse::<i64>() {
-                    Ok(JobId::Numeric(n))
-                } else {
-                    Ok(JobId::ArrayTask(s))
-                }
-            }
-            _ => Ok(JobId::Numeric(0)),
-        }
-    }
-}
 
 /// TRES (Trackable Resource) information
 #[derive(Debug, Clone, Default)]
@@ -240,7 +215,7 @@ impl Default for ExitCode {
 pub struct JobStep {
     pub time: Option<TimeInfo>,
     pub exit_code: Option<ExitCode>,
-    pub nodes: Option<HashMap<String, serde_json::Value>>,
+    pub nodes: Option<String>,
     pub state: Option<Vec<String>>,
     pub tres: Option<TresInfo>,
 }
@@ -312,22 +287,16 @@ pub struct SummaryMetrics {
 }
 
 /// Node information from scontrol
-#[derive(Debug, Clone, Default, Deserialize)]
+#[derive(Debug, Clone, Default)]
 pub struct NodeInfo {
     pub name: String,
-    #[serde(default)]
     pub gres: String,
-    #[serde(default)]
     pub gres_used: String,
     pub state: Option<Vec<String>>,
     pub partitions: Option<Vec<String>>,
-    #[serde(default)]
     pub cpus: i32,
-    #[serde(default)]
     pub alloc_cpus: i32,
-    #[serde(default)]
     pub alloc_idle_cpus: i32,
-    #[serde(default)]
     pub cpu_load: f64,
 }
 

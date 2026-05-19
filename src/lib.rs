@@ -11,6 +11,7 @@ pub mod parser;
 pub mod queued_jobs;
 pub mod reporter;
 pub mod resource_slots;
+pub mod scontrol_parser;
 pub mod resource_summary;
 pub mod slurm_utils;
 pub mod sstat;

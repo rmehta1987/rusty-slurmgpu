@@ -1,10 +1,10 @@
 use std::collections::HashMap;
 use std::process::Command;
-use std::sync::Mutex;
 
 use crate::command_ext::{run_with_timeout, SLURM_COMMAND_TIMEOUT};
 
 use once_cell::sync::Lazy;
+use std::sync::Mutex;
 
 static REGISTRY: Lazy<Mutex<TresRegistry>> = Lazy::new(|| Mutex::new(TresRegistry::new()));
 
@@ -39,40 +39,35 @@ impl TresRegistry {
         }
 
         let mut cmd = Command::new("sacctmgr");
-        cmd.args(["show", "tres", "--json"]);
+        cmd.args(["show", "tres", "--parsable2", "--noheader"]);
         match run_with_timeout(cmd, SLURM_COMMAND_TIMEOUT) {
             Ok(output) if output.status.success() => {
                 let stdout = String::from_utf8_lossy(&output.stdout);
-                match serde_json::from_str::<serde_json::Value>(&stdout) {
-                    Ok(data) => {
-                        if let Some(tres_list) = data.get("TRES").and_then(|v| v.as_array()) {
-                            for tres in tres_list {
-                                let tres_type = tres
-                                    .get("type")
-                                    .and_then(|v| v.as_str())
-                                    .unwrap_or("")
-                                    .to_string();
-                                let tres_name = tres
-                                    .get("name")
-                                    .and_then(|v| v.as_str())
-                                    .unwrap_or("")
-                                    .to_string();
-                                let tres_id =
-                                    tres.get("id").and_then(|v| v.as_i64()).map(|v| v as i32);
-
-                                if !tres_type.is_empty() {
-                                    if let Some(id) = tres_id {
-                                        self.tres_map.insert((tres_type, tres_name), id);
-                                    }
-                                }
-                            }
-                            self.loaded = true;
-                            return;
-                        }
+                let mut loaded_any = false;
+                for line in stdout.lines() {
+                    let line = line.trim();
+                    if line.is_empty() {
+                        continue;
                     }
-                    Err(e) => {
-                        eprintln!("Warning: Failed to parse TRES data: {}", e);
+                    // Format: Type|Name|ID  (Name may be empty → consecutive ||)
+                    let parts: Vec<&str> = line.splitn(3, '|').collect();
+                    if parts.len() < 3 {
+                        continue;
                     }
+                    let tres_type = parts[0].to_string();
+                    let tres_name = parts[1].to_string();
+                    let tres_id: i32 = match parts[2].parse() {
+                        Ok(id) => id,
+                        Err(_) => continue,
+                    };
+                    if !tres_type.is_empty() {
+                        self.tres_map.insert((tres_type, tres_name), tres_id);
+                        loaded_any = true;
+                    }
+                }
+                if loaded_any {
+                    self.loaded = true;
+                    return;
                 }
             }
             Ok(output) => {
@@ -150,5 +145,51 @@ impl TresRegistryRef {
             };
             println!("  {}{} -> ID {}", tres_type, name_str, tres_id);
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn parse_tres_parsable2(input: &str) -> HashMap<(String, String), i32> {
+        let mut map = HashMap::new();
+        for line in input.lines() {
+            let line = line.trim();
+            if line.is_empty() {
+                continue;
+            }
+            let parts: Vec<&str> = line.splitn(3, '|').collect();
+            if parts.len() < 3 {
+                continue;
+            }
+            let tres_type = parts[0].to_string();
+            let tres_name = parts[1].to_string();
+            if let Ok(id) = parts[2].parse::<i32>() {
+                if !tres_type.is_empty() {
+                    map.insert((tres_type, tres_name), id);
+                }
+            }
+        }
+        map
+    }
+
+    #[test]
+    fn test_parse_tres_parsable2() {
+        let input = "cpu||1\nmem||2\nenergy||3\nnode||4\nbilling||5\nfs|disk|6\nvmem||7\npages||8\ngres|gpu|1001\n";
+        let map = parse_tres_parsable2(input);
+        assert_eq!(map.get(&("cpu".to_string(), "".to_string())), Some(&1));
+        assert_eq!(map.get(&("gres".to_string(), "gpu".to_string())), Some(&1001));
+        assert_eq!(map.get(&("fs".to_string(), "disk".to_string())), Some(&6));
+        assert_eq!(map.len(), 9);
+    }
+
+    #[test]
+    fn test_parse_tres_parsable2_with_header() {
+        // --parsable2 without --noheader includes a Type|Name|ID header line
+        let input = "Type|Name|ID\ncpu||1\ngres|gpu|1001\n";
+        // The header line: "Type" has no integer in column 3 so it's skipped
+        let map = parse_tres_parsable2(input);
+        assert_eq!(map.len(), 2);
     }
 }
