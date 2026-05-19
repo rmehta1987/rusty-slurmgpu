@@ -25,7 +25,7 @@ impl UserUsageAnalyzer {
         let mut gpu_usage: HashMap<String, i32> = HashMap::new();
         let mut gpu_nodes: HashMap<String, std::collections::HashSet<String>> = HashMap::new();
 
-        let mut cmd = Command::new("/usr/bin/squeue");
+        let mut cmd = Command::new("squeue");
         cmd.args([
             "-O",
             "jobid,username,state,nodelist:50,tres-alloc:200",
@@ -136,7 +136,7 @@ impl UserUsageAnalyzer {
     pub fn get_user_cpu_usage(user: &str, debug: bool) -> i32 {
         let mut cpu_usage = 0;
 
-        let mut cmd = Command::new("/usr/bin/squeue");
+        let mut cmd = Command::new("squeue");
         cmd.args(["-O", "jobid,numcpus", "-h", "-u", user, "-t", "RUNNING"]);
 
         match run_with_timeout(cmd, SLURM_COMMAND_TIMEOUT) {
@@ -184,7 +184,7 @@ impl UserUsageAnalyzer {
         let mut user_cpu_usage: HashMap<String, i32> = HashMap::new();
         let mut user_memory_usage: HashMap<String, i64> = HashMap::new();
 
-        let mut cmd = Command::new("/usr/bin/squeue");
+        let mut cmd = Command::new("squeue");
         cmd.args([
             "-O",
             "jobid,username,state,nodelist:50,tres-alloc:200",

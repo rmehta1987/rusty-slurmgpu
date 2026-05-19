@@ -70,7 +70,7 @@ impl QueuedJobsCollector {
     pub fn get_queued_jobs_info(debug: bool, partitions: Option<&[String]>) -> Vec<QueuedJobInfo> {
         let mut queued_jobs = Vec::new();
 
-        let mut cmd = Command::new("/usr/bin/squeue");
+        let mut cmd = Command::new("squeue");
         // %i=JobID, %u=User, %P=Partition, %T=State, %r=Reason,
         // %C=NumCPUs, %b=TRESPerNode (gpu:N), %K=ArrayTaskID
         cmd.args(["--noheader", "-t", "PENDING", "-o", "%i|%u|%P|%T|%r|%C|%b|%K"]);
