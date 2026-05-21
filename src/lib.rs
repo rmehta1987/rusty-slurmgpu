@@ -1,3 +1,4 @@
+pub mod active_jobs;
 pub mod calculator;
 pub mod cli_helpers;
 pub mod cluster_data;

@@ -3,6 +3,7 @@ use clap::{CommandFactory, Parser, Subcommand};
 use clap_complete::Shell;
 use std::env;
 
+use slurm_gpu_reporter::active_jobs::ActiveJobsCollector;
 use slurm_gpu_reporter::cli_helpers::*;
 use slurm_gpu_reporter::gpu_usage::GPUUsageReporter;
 use slurm_gpu_reporter::reporter::GPUReporter;
@@ -168,6 +169,11 @@ pub struct ReportArgs {
     /// Ignored with --summary* flags.
     #[arg(long)]
     telegraf: bool,
+
+    /// Show currently running and pending jobs via squeue (bypasses sacct/time-range flags).
+    /// Combine with -r/--partition and -u/--gpu to narrow results.
+    #[arg(long)]
+    active: bool,
 }
 
 #[derive(Parser, Debug)]
@@ -336,7 +342,34 @@ fn run_report(args: ReportArgs) -> Result<()> {
         show_partition: args.show_partition,
         telegraf: args.telegraf,
         user_specified_time,
+        active: args.active,
     };
+
+    // Active mode: query squeue for RUNNING + PENDING jobs (bypasses sacct)
+    if options.active {
+        let mut jobs = ActiveJobsCollector::get_active_jobs(
+            options.partition_filter.as_deref(),
+            options.user.as_deref(),
+            options.debug,
+        );
+
+        if options.gpu {
+            jobs.retain(|j| j.gpu_request > 0);
+        }
+        if let Some(max) = options.max_jobs {
+            jobs.truncate(max);
+        }
+
+        if jobs.is_empty() {
+            eprintln!("No running or pending jobs found.");
+            if options.partition_filter.is_some() {
+                eprintln!("  Hint: Remove --partition to search all partitions.");
+            }
+        } else {
+            GPUReporter::print_active_report(&jobs, !options.plain, options.detailed);
+        }
+        return Ok(());
+    }
 
     // Fetch and parse jobs
     let all_jobs = fetch_and_parse_jobs(&options)?;

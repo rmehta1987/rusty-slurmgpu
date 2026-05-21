@@ -65,6 +65,7 @@ pub fn fetch_report_async(
             show_partition: true,
             telegraf: false,
             user_specified_time: false,
+            active: false,
         };
 
         let result = try_fetch_report(&options);

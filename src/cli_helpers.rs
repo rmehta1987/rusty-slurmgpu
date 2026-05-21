@@ -39,6 +39,7 @@ pub struct ReportOptions {
     pub show_partition: bool,
     pub telegraf: bool,
     pub user_specified_time: bool,
+    pub active: bool,
 }
 
 /// Fetch job data from sacct and parse it.

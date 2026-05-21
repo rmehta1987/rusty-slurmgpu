@@ -376,6 +376,22 @@ pub struct QueuedJobInfo {
     pub per_task_gpus: i32,
 }
 
+/// Active (RUNNING or PENDING) job from squeue
+#[derive(Debug, Clone)]
+pub struct ActiveJobInfo {
+    pub job_id: String,
+    pub user: String,
+    pub partition: String,
+    pub state: JobState,
+    pub elapsed: String,
+    pub time_limit: String,
+    pub cpu_request: i32,
+    pub gpu_request: i32,
+    pub gpu_type: Option<String>,
+    pub node: Option<String>,
+    pub reason: String,
+}
+
 /// Summary of CPU usage across nodes
 #[derive(Debug, Clone)]
 pub struct CPUTypeSummary {

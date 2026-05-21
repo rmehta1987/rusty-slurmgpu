@@ -1,5 +1,8 @@
 # slurm-gpu
 
+> **Based on [rusty-slurmgpu](https://gitlab.oit.duke.edu/wjs/rusty-slurmgpu) by W. Snyder (Duke OIT).**
+> This fork was created because the Slurm installation on this cluster was built without `--json` output support in `sacct` and `scontrol`. All Slurm queries were rewritten to use plain-text / parseable formats instead of the upstream JSON-based approach. Feature parity is otherwise maintained.
+
 GPU utilization reporting for Slurm clusters — a fast, single-binary Rust implementation.
 
 Queries `sacct`, `scontrol`, and `squeue` to produce per-job efficiency reports, cluster-wide GPU usage summaries, and real-time job monitoring via `sstat`. Outputs can be rich terminal tables, plain text, or InfluxDB Line Protocol for Telegraf/Prometheus ingestion.
@@ -18,38 +21,37 @@ cargo build --release
 
 ## Installation
 
-### From git (recommended)
+### From source (this fork)
 
 ```bash
-cargo install --git git@gitlab.oit.duke.edu:wjs/rusty-slurmgpu.git
-```
-
-This installs the `slurm-gpu` binary to `~/.cargo/bin/`. Then run the install script to create symlinks, shell completions, and man pages:
-
-```bash
-git clone git@gitlab.oit.duke.edu:wjs/rusty-slurmgpu.git
+git clone <this-repo-url>
 cd rusty-slurmgpu
+cargo build --release
 ./install.sh              # installs extras to ~/.local (default)
 ./install.sh /usr/local   # or specify a custom prefix
 ```
 
-### From release tarball
+This installs the `slurm-gpu` binary to the chosen prefix and creates symlinks, shell completions, and man pages.
 
-Download from the [Releases page](https://gitlab.oit.duke.edu/wjs/rusty-slurmgpu/-/releases):
+### Upstream (JSON-capable Slurm only)
+
+The original project supports `cargo install` and release tarballs. See the [upstream repo](https://gitlab.oit.duke.edu/wjs/rusty-slurmgpu) if your Slurm was compiled with JSON support.
+
+## Creating Symlinks
+
+After building, create symlinks so the short names work alongside the main binary:
 
 ```bash
-tar xzf slurm-gpu-0.1.0-linux-x86_64.tar.gz
-cd slurm-gpu-0.1.0-linux-x86_64
-./install.sh
+for name in slurm-report slurm-usage slurm-stat slurm-show-tres slurm-tui; do
+    ln -sf ~/.local/bin/slurm-gpu ~/.local/bin/${name}
+done
 ```
 
-### From source
+Make sure `~/.local/bin` is on your `PATH`:
 
 ```bash
-git clone git@gitlab.oit.duke.edu:wjs/rusty-slurmgpu.git
-cd rusty-slurmgpu
-cargo build --release
-./install.sh
+echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.bashrc
+source ~/.bashrc
 ```
 
 Symlinks invoke the corresponding subcommand automatically — `slurm-report` behaves exactly like `slurm-gpu report`.
@@ -109,31 +111,38 @@ slurm-report --plain -o report.txt -u username -S yesterday
 slurm-report --max-jobs 20 --min-gpu-eff 50
 ```
 
-#### Telegraf Output (InfluxDB Line Protocol)
+#### Active Jobs (running + pending via squeue)
 
-Output time-weighted average efficiency metrics in InfluxDB Line Protocol format, suitable for ingestion by Telegraf into Prometheus, InfluxDB, or Grafana.
+Use `--active` to query `squeue` directly for all currently running and pending jobs. This bypasses `sacct` and works without any time-range flags.
 
 ```bash
-# Single user
-slurm-report --telegraf -u ukh -S 2026-02-03 -E 2026-02-04
+# All running and pending jobs cluster-wide
+slurm-report --active
 
-# All users — one line per user
-slurm-report --telegraf -a -S 2026-02-03 -E 2026-02-04
+# Filter to a specific partition
+slurm-report --active -r compsci-gpu
 
-# Include partition tag
-slurm-report --telegraf -u ukh -r h200alloc -S 2026-02-03
+# Filter to a specific user
+slurm-report --active -u username
 
-# Include account tag
-slurm-report --telegraf -u ukh -A rescomp -S 2026-02-03
+# GPU jobs only in a partition (shows jobs requesting at least one GPU)
+slurm-report --active -r compsci-gpu --gpu
+
+# All GPU jobs for your user across all partitions
+slurm-report --active -u username --gpu
+
+# Add node column to running jobs and GPU type column
+slurm-report --active -r compsci-gpu --detailed
+
+# Limit rows shown
+slurm-report --active --max-jobs 50
 ```
 
-Example output:
+The `--active` table shows: **JobID**, **User**, **Partition**, **State** (RUNNING/PENDING), **Elapsed** (running time, `---` for pending), **TimeLimit**, **CPUs**, **GPUs** (requested), and **Reason** (queue reason for pending jobs).
 
-```
-slurm_gpu_efficiency,user=ukh,partition=h200alloc cpu_eff=1.3,mem_eff=59.9,gpu_eff=100.0,gpu_util=100.0,gpu_mem_eff=89.7,gpu_mem=125.6 1738800000000000000
-```
+`--filter-state` and time-range flags (`-S`, `-E`) are ignored when `--active` is set.
 
-**Measurement:** `slurm_gpu_efficiency`
+**Measurement:** `slurm_gpu_efficiency` **NOT AVAILABLE YET**
 
 | Tag | Description |
 |-----|-------------|
@@ -302,12 +311,13 @@ Most subcommands support these flags:
 src/
 ├── main.rs              # CLI entry point, subcommand dispatch, symlink detection
 ├── lib.rs               # Public module declarations
+├── active_jobs.rs       # squeue-based RUNNING+PENDING job collector (--active mode)
 ├── cli_helpers.rs       # Report option structs, job fetching, filtering, output routing
 ├── reporter.rs          # Table formatting (rich + plain + telegraf)
 ├── table_helpers.rs     # Shared table construction utilities (comfy-table)
 ├── calculator.rs        # Efficiency calculations, time-weighted averages
 ├── models.rs            # Data models (GPUMetrics, SummaryMetrics, SlurmJob, etc.)
-├── parser.rs            # sacct JSON output parsing
+├── parser.rs            # sacct parseable-format output parsing (plain text, not JSON)
 ├── validation.rs        # Input validation and security
 ├── constants.rs         # Configuration constants and thresholds
 ├── errors.rs            # Custom error types

@@ -1,7 +1,7 @@
 use comfy_table::{Attribute, Cell, CellAlignment, Color, Table};
 
 use crate::calculator::EfficiencyCalculator;
-use crate::models::{GPUMetrics, SummaryMetrics};
+use crate::models::{ActiveJobInfo, GPUMetrics, SummaryMetrics};
 use crate::table_helpers::*;
 
 pub struct GPUReporter;
@@ -532,5 +532,138 @@ impl GPUReporter {
             fields.join(","),
             timestamp_ns
         )
+    }
+
+    /// Print active (RUNNING + PENDING) job report to console.
+    pub fn print_active_report(jobs: &[ActiveJobInfo], rich: bool, detailed: bool) {
+        if rich {
+            let table = Self::format_rich_active_report(jobs, detailed);
+            println!("{table}");
+        } else {
+            print!("{}", Self::format_active_report(jobs, detailed));
+        }
+    }
+
+    /// Format active jobs as a plain-text table.
+    pub fn format_active_report(jobs: &[ActiveJobInfo], detailed: bool) -> String {
+        if jobs.is_empty() {
+            return "No running or pending jobs found.\n".to_string();
+        }
+
+        let mut lines = Vec::with_capacity(jobs.len() + 2);
+
+        let mut hdr_parts = vec![
+            format!("{:<12}", "JobID"),
+            format!("{:<11}", "User"),
+            format!("{:<12}", "Partition"),
+            format!("{:<10}", "State"),
+            format!("{:>8}", "Elapsed"),
+            format!("{:>10}", "TimeLimit"),
+            format!("{:>5}", "CPUs"),
+            format!("{:>5}", "GPUs"),
+        ];
+        if detailed {
+            hdr_parts.push(format!("{:<15}", "Node"));
+            hdr_parts.push(format!("{:<8}", "GPUType"));
+        }
+        hdr_parts.push("Reason".to_string());
+
+        let header = hdr_parts.join(" ");
+        let sep = "-".repeat(header.len());
+        lines.push(header);
+        lines.push(sep);
+
+        for job in jobs {
+            let gpu_str = if job.gpu_request > 0 {
+                job.gpu_request.to_string()
+            } else {
+                "---".to_string()
+            };
+
+            let mut parts = vec![
+                format!("{:<12}", job.job_id),
+                format!("{:<11}", job.user),
+                format!("{:<12}", job.partition),
+                format!("{:<10}", job.state),
+                format!("{:>8}", job.elapsed),
+                format!("{:>10}", job.time_limit),
+                format!("{:>5}", job.cpu_request),
+                format!("{:>5}", gpu_str),
+            ];
+            if detailed {
+                parts.push(format!("{:<15}", job.node.as_deref().unwrap_or("---")));
+                let gpu_type_str = match &job.gpu_type {
+                    Some(t) => t.as_str(),
+                    None if job.gpu_request > 0 => "gpu",
+                    None => "---",
+                };
+                parts.push(format!("{:<8}", gpu_type_str));
+            }
+            parts.push(job.reason.clone());
+            lines.push(parts.join(" "));
+        }
+
+        lines.join("\n") + "\n"
+    }
+
+    /// Format active jobs as a rich comfy-table.
+    pub fn format_rich_active_report(jobs: &[ActiveJobInfo], detailed: bool) -> Table {
+        let mut table = new_table();
+
+        let mut headers: Vec<Cell> = vec![
+            hdr("JobID"),
+            hdr("User"),
+            hdr("Partition"),
+            hdr("State"),
+            hdr_right("Elapsed"),
+            hdr_right("TimeLimit"),
+            hdr_right("CPUs"),
+            hdr_right("GPUs"),
+        ];
+        if detailed {
+            headers.push(hdr("Node"));
+            headers.push(hdr("GPUType"));
+        }
+        headers.push(hdr("Reason"));
+        table.set_header(headers);
+
+        for job in jobs {
+            let state_str = job.state.as_str();
+            let state_cell = Cell::new(state_str)
+                .fg(state_color(state_str))
+                .add_attribute(Attribute::Bold);
+
+            let gpu_str = if job.gpu_request > 0 {
+                job.gpu_request.to_string()
+            } else {
+                "---".to_string()
+            };
+
+            let mut row: Vec<Cell> = vec![
+                Cell::new(&job.job_id),
+                Cell::new(&job.user),
+                Cell::new(&job.partition),
+                state_cell,
+                Cell::new(&job.elapsed).set_alignment(CellAlignment::Right),
+                Cell::new(&job.time_limit).set_alignment(CellAlignment::Right),
+                Cell::new(job.cpu_request.to_string()).set_alignment(CellAlignment::Right),
+                Cell::new(&gpu_str).set_alignment(CellAlignment::Right),
+            ];
+
+            if detailed {
+                row.push(Cell::new(job.node.as_deref().unwrap_or("---")));
+                let gpu_type_str = match &job.gpu_type {
+                    Some(t) => t.as_str(),
+                    None if job.gpu_request > 0 => "gpu",
+                    None => "---",
+                };
+                row.push(Cell::new(gpu_type_str));
+            }
+            row.push(Cell::new(&job.reason));
+
+            table.add_row(row);
+        }
+
+        table
     }
 }
