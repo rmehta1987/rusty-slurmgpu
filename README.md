@@ -111,6 +111,38 @@ slurm-report --plain -o report.txt -u username -S yesterday
 slurm-report --max-jobs 20 --min-gpu-eff 50
 ```
 
+#### Filtering by Job State
+
+Use `--filter-state` to restrict results to a specific job state. Valid values: `all` (default), `running`, `pending`, `completed`, `failed`, `timeout`, `cancelled`, `out_of_memory`, `node_fail`, `preempted`.
+
+```bash
+# Show only currently running jobs (from sacct, last 24 hours)
+slurm-report --filter-state running -a
+
+# Running jobs in a specific partition
+slurm-report --filter-state running -r compsci-gpu -a
+
+# Running jobs for a specific user
+slurm-report --filter-state running -u username
+
+# Pending jobs cluster-wide (useful for diagnosing queue backlog)
+slurm-report --filter-state pending -a
+
+# Pending jobs in a partition for a specific user
+slurm-report --filter-state pending -r compsci-gpu -u username
+
+# Failed jobs in the last week
+slurm-report --filter-state failed -a -S 2026-05-14
+
+# Timed-out jobs for a user over a date range
+slurm-report --filter-state timeout -u username -S 2026-05-01 -E 2026-05-21
+
+# Cancelled jobs in a partition
+slurm-report --filter-state cancelled -r compsci-gpu -a -S yesterday
+```
+
+> **Note:** `--filter-state running` and `--filter-state pending` query sacct and require a time range — jobs submitted before the window may not appear. Use `--active` instead to see all currently running and pending jobs regardless of when they were submitted.
+
 #### Active Jobs (running + pending via squeue)
 
 Use `--active` to query `squeue` directly for all currently running and pending jobs. This bypasses `sacct` and works without any time-range flags.
