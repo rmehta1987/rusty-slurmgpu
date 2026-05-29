@@ -153,7 +153,7 @@ pub(crate) fn run_sacct(
         "sacct".to_string(),
         "-p".to_string(),
         "--delimiter=\t".to_string(),
-        "--format=JobID,User,Account,JobName,State,Elapsed,Start,End,Partition,AllocCPUS,AllocNodes,ReqMem,Timelimit,AllocTRES,TresUsageInMax,TresUsageOutMax,NodeList".to_string(),
+        "--format=JobID,User,Account,JobName,State,Elapsed,Start,End,Partition,AllocCPUS,AllocNodes,ReqMem,Timelimit,AllocTRES,TresUsageInMax,TresUsageOutMax,TresUsageInTot,NodeList".to_string(),
     ];
 
     let mut effective_start = start_time.map(|s| s.to_string());

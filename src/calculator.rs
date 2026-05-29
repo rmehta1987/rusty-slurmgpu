@@ -191,43 +191,71 @@ impl EfficiencyCalculator {
     }
 
     /// Extract CPU and memory utilization from job steps.
-    pub fn get_cpu_and_mem_metrics(job: &SlurmJob) -> (f64, f64) {
-        let mut max_cpu_time_seconds = 0.0f64;
+    ///
+    /// Returns `(cpu_eff_tot, cpu_eff_max, mem_eff)`:
+    /// - `cpu_eff_tot`: CPU efficiency from TresUsageInTot (total across all tasks) — matches `seff`
+    /// - `cpu_eff_max`: CPU efficiency from TresUsageInMax (busiest single task) — load-balance indicator
+    /// - `mem_eff`: memory efficiency
+    pub fn get_cpu_and_mem_metrics(job: &SlurmJob) -> (f64, f64, f64) {
+        let mut cpu_time_max = 0.0f64;  // TresUsageInMax CPU seconds (busiest task)
+        let mut cpu_time_tot = 0.0f64;  // TresUsageInTot CPU seconds (sum of all tasks)
         let mut max_mem_usage_bytes = 0.0f64;
         let allocated = Self::get_allocated_resources(job);
 
         for step in &job.steps {
-            let step_tres = match &step.tres {
-                Some(t) => t,
-                None => continue,
-            };
-
-            // Check consumed resources (parseable format)
-            if let Some(ref consumed) = step_tres.consumed {
-                let resources = match consumed {
-                    TresData::Resources(r) => r.clone(),
-                    TresData::Stats(s) => s.max.clone().unwrap_or_default(),
-                };
-
-                for resource in &resources {
-                    match resource.res_type.as_str() {
-                        "cpu" => {
-                            max_cpu_time_seconds = max_cpu_time_seconds.max(resource.count);
+            // TresUsageInMax → busiest task CPU time + memory
+            if let Some(ref step_tres) = step.tres {
+                if let Some(ref consumed) = step_tres.consumed {
+                    let resources = match consumed {
+                        TresData::Resources(r) => r.clone(),
+                        TresData::Stats(s) => s.max.clone().unwrap_or_default(),
+                    };
+                    for resource in &resources {
+                        match resource.res_type.as_str() {
+                            "cpu" => cpu_time_max = cpu_time_max.max(resource.count),
+                            "mem" => {
+                                max_mem_usage_bytes =
+                                    max_mem_usage_bytes.max(resource.count * BYTES_PER_MB);
+                            }
+                            _ => {}
                         }
-                        "mem" => {
-                            let mem_mb = resource.count;
-                            max_mem_usage_bytes = max_mem_usage_bytes.max(mem_mb * BYTES_PER_MB);
+                    }
+                }
+            }
+
+            // TresUsageInTot → total CPU time across all tasks
+            if let Some(ref step_tres_tot) = step.tres_tot {
+                if let Some(ref consumed) = step_tres_tot.consumed {
+                    let resources = match consumed {
+                        TresData::Resources(r) => r.clone(),
+                        TresData::Stats(s) => s.max.clone().unwrap_or_default(),
+                    };
+                    for resource in &resources {
+                        if resource.res_type == "cpu" {
+                            cpu_time_tot = cpu_time_tot.max(resource.count);
                         }
-                        _ => {}
                     }
                 }
             }
         }
 
-        // Calculate efficiencies
-        let cpu_eff = if allocated.cpu > 0 && job.time.elapsed > 0 && max_cpu_time_seconds > 0.0 {
-            ((max_cpu_time_seconds / (allocated.cpu as f64 * job.time.elapsed as f64))
+        // Fall back to InMax if InTot is unavailable (cluster without full TRES accounting)
+        let cpu_time_for_eff = if cpu_time_tot > 0.0 {
+            cpu_time_tot
+        } else {
+            cpu_time_max
+        };
+
+        let cpu_eff = if allocated.cpu > 0 && job.time.elapsed > 0 && cpu_time_for_eff > 0.0 {
+            ((cpu_time_for_eff / (allocated.cpu as f64 * job.time.elapsed as f64))
                 * MAX_EFFICIENCY_PERCENT)
+                .min(MAX_EFFICIENCY_PERCENT)
+        } else {
+            -1.0
+        };
+
+        let cpu_peak_eff = if job.time.elapsed > 0 && cpu_time_max > 0.0 {
+            ((cpu_time_max / job.time.elapsed as f64) * MAX_EFFICIENCY_PERCENT)
                 .min(MAX_EFFICIENCY_PERCENT)
         } else {
             -1.0
@@ -241,7 +269,7 @@ impl EfficiencyCalculator {
             -1.0
         };
 
-        (cpu_eff, mem_eff)
+        (cpu_eff, cpu_peak_eff, mem_eff)
     }
 
     /// Calculate time efficiency based on time limit.
@@ -360,7 +388,7 @@ impl EfficiencyCalculator {
                 (0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0)
             } else {
                 let time_eff = Self::calculate_time_efficiency(job, partition_limits);
-                let (cpu_eff, mem_eff) = Self::get_cpu_and_mem_metrics(job);
+                let (cpu_eff, _cpu_peak_eff, mem_eff) = Self::get_cpu_and_mem_metrics(job);
                 let (gpu_util, gpu_mem_mb) = Self::get_gpu_metrics_from_steps(job);
 
                 let gpu_eff = if gpu_count > 0 && gpu_util > 0.0 {
@@ -403,8 +431,10 @@ impl EfficiencyCalculator {
         let format_eff = |value: f64, show_zero: bool| -> String {
             if is_pending_or_running {
                 "---".to_string()
-            } else if value > 0.0 {
+            } else if value >= 0.05 {
                 format!("{:.1}%", value)
+            } else if value > 0.0 {
+                "<0.1%".to_string()
             } else if show_zero {
                 "0.0%".to_string()
             } else {

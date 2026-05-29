@@ -255,6 +255,11 @@ impl SlurmJobParser {
             .or_else(|| job_data.get("TRESUsageOutMax"))
             .map(|s| s.as_str())
             .unwrap_or("");
+        let usage_in_tot_str = job_data
+            .get("TresUsageInTot")
+            .or_else(|| job_data.get("TRESUsageInTot"))
+            .map(|s| s.as_str())
+            .unwrap_or("");
 
         let step_tres = if !usage_in_max_str.is_empty() || !usage_out_max_str.is_empty() {
             let usage_str = if !usage_in_max_str.is_empty() {
@@ -265,6 +270,16 @@ impl SlurmJobParser {
             let consumed_tres = Self::parse_usage_string(usage_str);
             Some(TresInfo {
                 consumed: Some(TresData::Resources(consumed_tres)),
+                ..Default::default()
+            })
+        } else {
+            None
+        };
+
+        let step_tres_tot = if !usage_in_tot_str.is_empty() {
+            let tot_tres = Self::parse_usage_string(usage_in_tot_str);
+            Some(TresInfo {
+                consumed: Some(TresData::Resources(tot_tres)),
                 ..Default::default()
             })
         } else {
@@ -282,6 +297,7 @@ impl SlurmJobParser {
         let job_step = JobStep {
             time: Some(time_info.clone()),
             tres: step_tres,
+            tres_tot: step_tres_tot,
             state: Some(vec![state_str.clone()]),
             nodes: step_nodes,
             ..Default::default()

@@ -217,7 +217,10 @@ pub struct JobStep {
     pub exit_code: Option<ExitCode>,
     pub nodes: Option<String>,
     pub state: Option<Vec<String>>,
+    /// TRES usage from TresUsageInMax (max per task).
     pub tres: Option<TresInfo>,
+    /// TRES usage from TresUsageInTot (sum across all tasks).
+    pub tres_tot: Option<TresInfo>,
 }
 
 /// Association information
@@ -453,6 +456,8 @@ pub struct JobInfoData {
     pub time_limit_seconds: Option<i64>,
     /// Aggregate efficiency strings (formatted as "85.3%" or "---").
     pub cpu_eff: String,
+    /// Busiest single-task CPU efficiency (TresUsageInMax / walltime), job-info only.
+    pub cpu_peak_eff: String,
     pub mem_eff: String,
     pub gpu_eff: String,
     pub gpu_util: String,

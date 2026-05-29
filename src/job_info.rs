@@ -60,6 +60,8 @@ pub fn run_job_info(args: JobInfoArgs) -> anyhow::Result<()> {
     let metric = EfficiencyCalculator::calculate_metrics(&job, partition_limits, args.debug);
 
     let allocated = EfficiencyCalculator::get_allocated_resources(&job);
+    let (_, cpu_peak_eff_f64, _) = EfficiencyCalculator::get_cpu_and_mem_metrics(&job);
+    let cpu_peak_eff = format_cpu_peak_eff(cpu_peak_eff_f64);
     let gpu_type_str = EfficiencyCalculator::detect_gpu_type(&job);
     let gpu_type: Option<String> = if gpu_type_str == "default" {
         None
@@ -107,6 +109,7 @@ pub fn run_job_info(args: JobInfoArgs) -> anyhow::Result<()> {
             }
         }),
         cpu_eff: metric.cpu_eff.clone(),
+        cpu_peak_eff,
         mem_eff: metric.mem_eff.clone(),
         gpu_eff: metric.gpu_eff.clone(),
         gpu_util: metric.gpu_util.clone(),
@@ -330,6 +333,7 @@ fn print_overall_efficiency(data: &JobInfoData) {
 
     let rows = [
         ("CPU Efficiency",  &data.cpu_eff),
+        ("CPU Peak Core",   &data.cpu_peak_eff),
         ("CPU Memory",      &data.mem_eff),
         ("GPU Efficiency",  &data.gpu_eff),
         ("GPU Utilization", &data.gpu_util),
@@ -338,7 +342,7 @@ fn print_overall_efficiency(data: &JobInfoData) {
     ];
 
     for (label, value) in &rows {
-        if *value == "---" && (label.contains("GPU") && data.num_gpus == 0) {
+        if label.contains("GPU") && data.num_gpus == 0 {
             continue;
         }
         table.add_row(vec![
@@ -508,6 +512,18 @@ fn advisory_notes(data: &JobInfoData) -> Vec<String> {
 // Formatting helpers
 // ---------------------------------------------------------------------------
 
+fn format_cpu_peak_eff(value: f64) -> String {
+    if value < 0.0 {
+        "---".to_string()
+    } else if value >= 0.05 {
+        format!("{:.1}%", value)
+    } else if value > 0.0 {
+        "<0.1%".to_string()
+    } else {
+        "---".to_string()
+    }
+}
+
 fn format_start_time(epoch: i64) -> String {
     use chrono::{Local, TimeZone};
     match Local.timestamp_opt(epoch, 0).single() {
@@ -646,6 +662,7 @@ mod tests {
             elapsed_seconds: 3600,
             time_limit_seconds: Some(14400),
             cpu_eff: "75.0%".to_string(),
+            cpu_peak_eff: "12.5%".to_string(),
             mem_eff: "50.0%".to_string(),
             gpu_eff: "80.0%".to_string(),
             gpu_util: "78.0%".to_string(),
