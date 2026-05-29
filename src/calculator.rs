@@ -225,7 +225,7 @@ impl EfficiencyCalculator {
         }
 
         // Calculate efficiencies
-        let cpu_eff = if allocated.cpu > 0 && job.time.elapsed > 0 && max_cpu_time_seconds >= 0.0 {
+        let cpu_eff = if allocated.cpu > 0 && job.time.elapsed > 0 && max_cpu_time_seconds > 0.0 {
             ((max_cpu_time_seconds / (allocated.cpu as f64 * job.time.elapsed as f64))
                 * MAX_EFFICIENCY_PERCENT)
                 .min(MAX_EFFICIENCY_PERCENT)
