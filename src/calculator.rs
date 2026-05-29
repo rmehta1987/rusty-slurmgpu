@@ -62,6 +62,7 @@ impl EfficiencyCalculator {
     }
 
     /// Get allocated resources from TRES data.
+    #[allow(clippy::collapsible_match)]
     pub fn get_allocated_resources(job: &SlurmJob) -> AllocatedResources {
         let mut resources = AllocatedResources {
             cpu: 0,

@@ -411,6 +411,57 @@ impl CPUTypeSummary {
     }
 }
 
+/// Per-node TRES usage extracted from `|`-separated sacct TRES fields.
+/// Fields are zero/empty when TRES accounting is not enabled on the cluster.
+#[derive(Debug, Clone, Default)]
+pub struct NodeTresUsage {
+    pub node_name: String,
+    /// Total CPU seconds used on this node (from TresUsageInTot).
+    pub cpu_seconds_used: i64,
+    /// CPUs allocated to this node (derived: total_cpus / num_nodes).
+    pub cpu_alloc_per_node: i32,
+    /// Max RSS memory used in MB on this node (from TresUsageInMax).
+    pub mem_used_mb: f64,
+    /// Memory allocated per node in MB (derived: total_mem / num_nodes).
+    pub mem_alloc_mb: f64,
+    /// Per-device GPU utilisation: (device_index, percent).
+    pub gpu_util_by_index: Vec<(u32, f64)>,
+    /// Per-device GPU memory used: (device_index, used_mb).
+    pub gpu_mem_used_by_index: Vec<(u32, f64)>,
+}
+
+/// Assembled data for the `job-info` report.
+#[derive(Debug, Clone, Default)]
+pub struct JobInfoData {
+    pub job_id: String,
+    pub user: String,
+    pub account: String,
+    pub job_name: String,
+    pub state: String,
+    pub num_nodes: i32,
+    pub num_cpus: i32,
+    pub mem_alloc_mb: f64,
+    pub num_gpus: i32,
+    pub gpu_type: Option<String>,
+    /// Total GPU memory per device in MB; `None` when GPU type is unknown.
+    pub gpu_total_mem_mb: Option<f64>,
+    pub qos: String,
+    pub partition: String,
+    pub cluster: String,
+    pub start_epoch: Option<i64>,
+    pub elapsed_seconds: i64,
+    pub time_limit_seconds: Option<i64>,
+    /// Aggregate efficiency strings (formatted as "85.3%" or "---").
+    pub cpu_eff: String,
+    pub mem_eff: String,
+    pub gpu_eff: String,
+    pub gpu_util: String,
+    pub gpu_mem_eff: String,
+    pub time_eff: String,
+    /// Per-node breakdown; empty when TRES accounting is not enabled.
+    pub node_usage: Vec<NodeTresUsage>,
+}
+
 /// Summary of queued jobs
 #[derive(Debug, Clone)]
 pub struct QueueSummary {

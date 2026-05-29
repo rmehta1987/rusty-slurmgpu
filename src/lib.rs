@@ -7,6 +7,7 @@ pub mod constants;
 pub mod errors;
 pub mod gpu_usage;
 pub mod gres_parser;
+pub mod job_info;
 pub mod models;
 pub mod parser;
 pub mod queued_jobs;

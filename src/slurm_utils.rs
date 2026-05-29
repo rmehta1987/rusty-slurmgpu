@@ -255,6 +255,47 @@ pub(crate) fn run_sacct(
     Ok(stdout)
 }
 
+/// Run sacct for the `job-info` subcommand, querying by job ID with an
+/// expanded format that includes QOS, Cluster, and TRES usage totals.
+pub(crate) fn run_sacct_job_info(job_id: &str, debug: bool) -> Result<String, GpuReportError> {
+    let cmd_args = [
+        "sacct".to_string(),
+        "-j".to_string(),
+        job_id.to_string(),
+        "-p".to_string(),
+        "--delimiter=\t".to_string(),
+        "--format=JobID,User,Account,JobName,State,Elapsed,Start,End,Partition,AllocCPUS,AllocNodes,ReqMem,Timelimit,QOS,Cluster,AllocTRES,TresUsageInMax,TresUsageInTot,NodeList".to_string(),
+    ];
+
+    if debug {
+        eprintln!("Running command: {}", cmd_args.join(" "));
+    }
+
+    let mut cmd = Command::new(&cmd_args[0]);
+    cmd.args(&cmd_args[1..]);
+    let output = run_with_timeout(cmd, SACCT_TIMEOUT)
+        .map_err(|e| GpuReportError::slurm_command("sacct", -1, &e.to_string(), ""))?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        let exit_code = output.status.code().unwrap_or(-1);
+        return Err(GpuReportError::slurm_command(
+            &cmd_args.join(" "),
+            exit_code,
+            stderr.trim(),
+            "",
+        ));
+    }
+
+    let stdout = String::from_utf8_lossy(&output.stdout).to_string();
+
+    if debug {
+        eprintln!("Debug: sacct job-info returned {} bytes", stdout.len());
+    }
+
+    Ok(stdout)
+}
+
 fn resolve_time_keyword(time_str: &str) -> String {
     match time_str.to_lowercase().as_str() {
         "yesterday" => (chrono::Local::now() - chrono::Duration::days(1))

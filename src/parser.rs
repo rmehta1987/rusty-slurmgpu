@@ -13,6 +13,9 @@ static TRES_PATTERN: Lazy<Regex> =
 static MEMORY_UNIT_PATTERN: Lazy<Regex> = Lazy::new(|| {
     Regex::new(r"^(\d+(?:\.\d+)?)([KMGT]?)$").expect("MEMORY_UNIT_PATTERN regex is valid")
 });
+static GRES_DEVICE_PATTERN: Lazy<Regex> = Lazy::new(|| {
+    Regex::new(r"^gres/(gpuutil|gpumem):(\d+)$").expect("GRES_DEVICE_PATTERN regex is valid")
+});
 
 pub struct SlurmJobParser;
 
@@ -526,6 +529,63 @@ impl SlurmJobParser {
         }
 
         (gpu_count, gpu_type)
+    }
+
+    /// Parse a `|`-separated per-node TRES string from `TresUsageInMax` or
+    /// `TresUsageInTot` into per-node usage records.
+    ///
+    /// Returns an empty vec when TRES accounting is not enabled (empty input)
+    /// or when the string contains no `node=` qualifiers.
+    pub fn parse_per_node_tres(tres_str: &str) -> Vec<crate::models::NodeTresUsage> {
+        if tres_str.is_empty() {
+            return Vec::new();
+        }
+
+        let mut results = Vec::new();
+
+        for segment in tres_str.split('|') {
+            let segment = segment.trim();
+            if segment.is_empty() {
+                continue;
+            }
+
+            let mut entry = crate::models::NodeTresUsage::default();
+
+            for cap in TRES_PATTERN.captures_iter(segment) {
+                let key = cap[1].trim();
+                let value = cap[2].trim();
+
+                match key {
+                    "node" => entry.node_name = value.to_string(),
+                    "cpu" => entry.cpu_seconds_used = Self::parse_time_to_seconds(value),
+                    "mem" => entry.mem_used_mb = Self::parse_memory_to_mb(value) as f64,
+                    k => {
+                        if let Some(dev_cap) = GRES_DEVICE_PATTERN.captures(k) {
+                            let kind = &dev_cap[1];
+                            let idx: u32 = dev_cap[2].parse().unwrap_or(0);
+                            match kind {
+                                "gpuutil" => {
+                                    if let Ok(pct) = value.parse::<f64>() {
+                                        entry.gpu_util_by_index.push((idx, pct));
+                                    }
+                                }
+                                "gpumem" => {
+                                    let mb = Self::parse_memory_to_mb(value) as f64;
+                                    entry.gpu_mem_used_by_index.push((idx, mb));
+                                }
+                                _ => {}
+                            }
+                        }
+                    }
+                }
+            }
+
+            if !entry.node_name.is_empty() {
+                results.push(entry);
+            }
+        }
+
+        results
     }
 }
 

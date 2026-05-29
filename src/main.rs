@@ -6,6 +6,7 @@ use std::env;
 use slurm_gpu_reporter::active_jobs::ActiveJobsCollector;
 use slurm_gpu_reporter::cli_helpers::*;
 use slurm_gpu_reporter::gpu_usage::GPUUsageReporter;
+use slurm_gpu_reporter::job_info::{self, JobInfoArgs};
 use slurm_gpu_reporter::reporter::GPUReporter;
 use slurm_gpu_reporter::slurm_utils::{build_node_gpu_mapping, sort_metrics};
 use slurm_gpu_reporter::sstat::SstatMonitor;
@@ -46,6 +47,25 @@ enum Commands {
 
     /// Generate shell completion scripts
     Completions(CompletionsArgs),
+
+    /// Show detailed statistics for a single Slurm job
+    #[command(name = "job-info")]
+    JobInfo(JobInfoCliArgs),
+}
+
+#[derive(Parser, Debug)]
+pub struct JobInfoCliArgs {
+    /// Slurm job ID to query
+    #[arg(short = 'j', long = "job", required = true)]
+    job_id: String,
+
+    /// Plain text output (suppresses ANSI formatting)
+    #[arg(long)]
+    plain: bool,
+
+    /// Enable debug output
+    #[arg(long)]
+    debug: bool,
 }
 
 #[derive(Parser, Debug)]
@@ -283,6 +303,15 @@ fn main() -> Result<()> {
             run_tui(args)?;
             return Ok(());
         }
+        "slurm-job-info" => {
+            let args = JobInfoCliArgs::parse();
+            job_info::run_job_info(JobInfoArgs {
+                job_id: args.job_id,
+                plain: args.plain,
+                debug: args.debug,
+            })?;
+            return Ok(());
+        }
         _ => {}
     }
 
@@ -296,6 +325,13 @@ fn main() -> Result<()> {
         Some(Commands::ShowTres) => run_show_tres(),
         Some(Commands::Tui(args)) => run_tui(args)?,
         Some(Commands::Completions(args)) => run_completions(args),
+        Some(Commands::JobInfo(args)) => {
+            job_info::run_job_info(JobInfoArgs {
+                job_id: args.job_id,
+                plain: args.plain,
+                debug: args.debug,
+            })?;
+        }
         None => {
             // Default to usage report when no subcommand given
             run_usage(UsageArgs {

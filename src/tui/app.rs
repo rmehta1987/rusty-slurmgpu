@@ -486,6 +486,7 @@ pub fn run_app(config: TuiConfig) -> io::Result<()> {
                     KeyCode::Char('?') => {
                         app.show_help = true;
                     }
+                    #[allow(clippy::collapsible_match)]
                     KeyCode::Esc => {
                         if !app.search.is_empty() {
                             app.search.clear();
